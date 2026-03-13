@@ -1,0 +1,65 @@
+# Python
+
+**pycache**/
+*.pyc
+*.pyo
+*.pyd
+*.db
+
+# Virtual environment
+
+venv/
+.env
+
+# VSCode
+
+.vscode/
+
+# OS files
+
+.DS_Store
+Thumbs.db
+
+# Logs
+
+*.log
+
+# Uploads (resumes etc.)
+
+uploads/
+
+# Python packaging
+
+build/
+dist/
+*.egg-info/
+
+# pytest
+
+.pytest_cache/
+
+# mypy
+
+.mypy_cache/
+
+# coverage
+
+.coverage
+htmlcov/
+
+# Alembic
+
+alembic/versions/
+
+# dotenv
+
+.env.*
+
+# IDE
+
+.idea/
+
+# temporary files
+
+*.tmp
+*.temp
