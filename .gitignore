@@ -1,1 +1,4 @@
-rag
+venv
+__pycache__
+.env
+data
