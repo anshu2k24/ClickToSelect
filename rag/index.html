@@ -118,7 +118,8 @@
     </div>
 
     <script>
-        const API_BASE = window.location.protocol === 'file:' ? 'http://localhost:8000' : '';
+        // Updated port to 8080 per request
+        const API_BASE = window.location.protocol === 'file:' ? 'http://localhost:8080' : 'http://localhost:8080';
 
         const chat = document.getElementById('chat');
         const input = document.getElementById('queryInput');
@@ -247,7 +248,6 @@
 
                     let displayHTML = renderMd(text.replace(/\[LEVEL_UP\]|\[END_INTERVIEW\]/g, ''));
                     
-                    // Prevent empty bubbles if LLM terminated immediately
                     if(displayHTML.trim() === "") {
                         botEl.style.display = 'none';
                     } else {
@@ -260,7 +260,6 @@
 
                 chatHistory.push({ role: 'assistant', content: text.trim() });
 
-                // ── EVALUATE INTERVIEW STATE ──
                 if (text.includes('[LEVEL_UP]')) {
                     let currentLevelIdx = levelsOrder.indexOf(levelSelect.value);
                     if (currentLevelIdx < levelsOrder.length - 1) {
