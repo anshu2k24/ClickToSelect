@@ -8,7 +8,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="icon" href="data:,">
     <style>
-        /* ... Keep all your previous CSS styles exactly the same ... */
         * {
             margin: 0;
             padding: 0;
@@ -27,7 +26,7 @@
 
         .chat-container {
             width: 100%;
-            max-width: 700px;
+            max-width: 850px;
             height: 90vh;
             max-height: 850px;
             display: flex;
@@ -57,28 +56,75 @@
 
         .setup-panel {
             display: flex;
-            gap: 10px;
+            gap: 15px;
             justify-content: center;
+            align-items: stretch;
             flex-wrap: wrap;
         }
 
+        .setup-col {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        /* Dynamic Repo Inputs */
+        .repo-inputs {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .repo-row {
+            display: flex;
+            gap: 5px;
+        }
+
+        .repo-row input {
+            width: 220px;
+        }
+
+        .add-repo-btn {
+            padding: 0 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            color: #fff;
+            cursor: pointer;
+            transition: 0.2s;
+            font-weight: bold;
+        }
+
+        .add-repo-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .setup-panel input,
         .setup-panel select {
             padding: 8px 12px;
             background: rgba(255, 255, 255, 0.1);
             border: 1px solid rgba(255, 255, 255, 0.2);
             border-radius: 8px;
             color: #fff;
-            font-size: 14px;
+            font-size: 13px;
             outline: none;
-            cursor: pointer;
+        }
+
+        .setup-panel input::placeholder {
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .setup-panel select[multiple] {
+            height: 95px;
         }
 
         .setup-panel select option {
             background: #302b63;
             color: white;
+            padding: 4px;
         }
 
-        .setup-panel button {
+        .setup-panel button.primary-btn {
             padding: 8px 16px;
             background: #34d399;
             color: #064e3b;
@@ -87,9 +133,11 @@
             font-weight: 600;
             cursor: pointer;
             transition: opacity 0.2s;
+            height: 38px;
+            align-self: flex-end;
         }
 
-        .setup-panel button:hover {
+        .setup-panel button.primary-btn:hover {
             opacity: 0.9;
         }
 
@@ -273,7 +321,6 @@
             transform: none;
         }
 
-        /* New Style for System notifications */
         .msg.system {
             align-self: center;
             background: rgba(52, 211, 153, 0.15);
@@ -282,6 +329,16 @@
             border: 1px solid rgba(52, 211, 153, 0.3);
             text-align: center;
             margin: 10px 0;
+            border-radius: 16px;
+            padding: 8px 16px;
+            font-size: 13px;
+        }
+
+        .help-text {
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.4);
+            margin-top: 4px;
+            text-align: center;
         }
     </style>
 </head>
@@ -291,36 +348,53 @@
         <div class="header">
             <h1>Adaptive AI Interviewer</h1>
             <div class="setup-panel" id="setupPanel">
-                <select id="topicSelect">
-                    <option value="c">C</option>
-                    <option value="cpp">C++</option>
-                    <option value="django">Django</option>
-                    <option value="docker">Docker</option>
-                    <option value="go">Go</option>
-                    <option value="java">Java</option>
-                    <option value="javascript">JavaScript</option>
-                    <option value="kotlin">Kotlin</option>
-                    <option value="mongodb">MongoDB</option>
-                    <option value="mysql">MySQL</option>
-                    <option value="nodejs">NodeJS</option>
-                    <option value="postgresql">PostgreSQL</option>
-                    <option value="python" selected>Python</option>
-                    <option value="react">React</option>
-                    <option value="rust">Rust</option>
-                    <option value="typescript">TypeScript</option>
-                </select>
-                <select id="levelSelect">
-                    <option value="Beginner">Beginner</option>
-                    <option value="Intermediate">Intermediate</option>
-                    <option value="Advanced">Advanced</option>
-                </select>
-                <button id="startBtn">Start Interview</button>
+
+                <div class="setup-col">
+                    <div class="repo-inputs" id="repoInputsContainer">
+                        <div class="repo-row">
+                            <input type="text" class="repo-url-input" placeholder="GitHub Repo URL (Optional)">
+                            <button class="add-repo-btn" id="addRepoBtn" title="Add another repo">+</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="setup-col">
+                    <select id="topicSelect" multiple title="Hold Ctrl/Cmd to select multiple">
+                        <option value="c">C</option>
+                        <option value="cpp">C++</option>
+                        <option value="django">Django</option>
+                        <option value="docker">Docker</option>
+                        <option value="go">Go</option>
+                        <option value="java">Java</option>
+                        <option value="javascript">JavaScript</option>
+                        <option value="kotlin">Kotlin</option>
+                        <option value="mongodb">MongoDB</option>
+                        <option value="mysql">MySQL</option>
+                        <option value="nodejs">NodeJS</option>
+                        <option value="postgresql">PostgreSQL</option>
+                        <option value="python" selected>Python</option>
+                        <option value="react">React</option>
+                        <option value="rust">Rust</option>
+                        <option value="typescript">TypeScript</option>
+                    </select>
+                    <div class="help-text">Hold Ctrl/Cmd to select multiple.</div>
+                </div>
+
+                <div class="setup-col">
+                    <select id="levelSelect">
+                        <option value="Beginner">Beginner</option>
+                        <option value="Intermediate">Intermediate</option>
+                        <option value="Advanced">Advanced</option>
+                    </select>
+                    <button id="startBtn" class="primary-btn">Start Interview</button>
+                </div>
+
             </div>
         </div>
 
         <div class="messages" id="chat">
-            <div class="msg bot" id="welcomeMsg">👋 Welcome! Set your topic and level above, then click Start Interview.
-                (5 questions per level).</div>
+            <div class="msg bot" id="welcomeMsg">👋 Welcome! Provide repos, select languages, and click Start. (7
+                questions per level).</div>
         </div>
 
         <div class="input-area">
@@ -340,29 +414,77 @@
         const startBtn = document.getElementById('startBtn');
         const welcomeMsg = document.getElementById('welcomeMsg');
 
+        // Repo dynamic inputs
+        const repoContainer = document.getElementById('repoInputsContainer');
+        const addRepoBtn = document.getElementById('addRepoBtn');
+
         let sending = false;
         let chatHistory = [];
-
-        // State Tracking variables
         let currentQuestionNumber = 1;
+        let currentRepoNames = [];
+        let currentTopics = [];
         const levelsOrder = ["Beginner", "Intermediate", "Advanced"];
+
+        // Handle adding more repo input fields (Max 5)
+        let repoCount = 1;
+        addRepoBtn.addEventListener('click', () => {
+            if (repoCount >= 5) return alert("Maximum 5 repositories allowed.");
+
+            const newRow = document.createElement('div');
+            newRow.className = 'repo-row';
+            newRow.innerHTML = `<input type="text" class="repo-url-input" placeholder="GitHub Repo URL ${repoCount + 1}">`;
+            repoContainer.appendChild(newRow);
+            repoCount++;
+
+            if (repoCount === 5) addRepoBtn.style.display = 'none';
+        });
 
         startBtn.addEventListener('click', startInterview);
         input.addEventListener('keydown', e => { if (e.key === 'Enter' && !sending) sendReply(); });
         sendBtn.addEventListener('click', () => { if (!sending) sendReply(); });
 
         async function startInterview() {
+            // Collect all non-empty repo URLs
+            const repoInputs = document.querySelectorAll('.repo-url-input');
+            const repoUrls = Array.from(repoInputs).map(inp => inp.value.trim()).filter(url => url);
+
+            currentTopics = Array.from(topicSelect.selectedOptions).map(opt => opt.value);
+            if (currentTopics.length === 0) return alert("Please select at least one topic.");
+
+            // Lock UI
+            repoInputs.forEach(inp => inp.disabled = true);
+            addRepoBtn.disabled = true;
             topicSelect.disabled = true;
             levelSelect.disabled = true;
             startBtn.disabled = true;
             welcomeMsg.style.display = 'none';
+
+            if (repoUrls.length > 0) {
+                const loadingIngest = addBubble(`Cloning and analyzing ${repoUrls.length} repo(s)... This may take a minute.`, 'thinking');
+                try {
+                    const res = await fetch(API_BASE + '/ingest', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ repo_urls: repoUrls })
+                    });
+                    if (!res.ok) throw new Error('Failed to ingest repositories.');
+                    const data = await res.json();
+
+                    currentRepoNames = data.repo_names;
+                    loadingIngest.remove();
+                    addBubble(`✅ Successfully ingested: <b>${currentRepoNames.join(', ')}</b>!`, 'system');
+                } catch (err) {
+                    loadingIngest.remove();
+                    addBubble(`⚠ Error reading repos: ${err.message}. Proceeding with general questions.`, 'error');
+                }
+            }
+
             input.disabled = false;
             sendBtn.disabled = false;
-
             currentQuestionNumber = 1;
             chatHistory = [];
 
-            await processTurn(`[SYSTEM: Start the interview. Introduce yourself and ask question 1 for ${levelSelect.value}.]`);
+            await processTurn(`[SYSTEM: Start the interview. Ask question 1 for ${levelSelect.value}.]`);
         }
 
         async function sendReply() {
@@ -382,7 +504,7 @@
             sendBtn.disabled = true;
             input.disabled = true;
 
-            const thinkEl = addBubble(`Evaluating (Q${Math.min(currentQuestionNumber, 5)}/5)`, 'thinking');
+            const thinkEl = addBubble(`Evaluating (Q${Math.min(currentQuestionNumber, 7)}/7)`, 'thinking');
             const botEl = addBubble('', 'bot');
             botEl.style.display = 'none';
 
@@ -392,17 +514,17 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         message: userMessage,
-                        topic: topicSelect.options[topicSelect.selectedIndex].text,
+                        topics: currentTopics,
                         level: levelSelect.value,
                         history: chatHistory,
-                        question_number: currentQuestionNumber
+                        question_number: currentQuestionNumber,
+                        repo_names: currentRepoNames
                     }),
                 });
 
                 if (!res.ok) throw new Error('Server returned ' + res.status);
 
                 thinkEl.remove();
-                botEl.style.display = '';
 
                 const reader = res.body.getReader();
                 const decoder = new TextDecoder();
@@ -413,9 +535,16 @@
                     if (done) break;
                     text += decoder.decode(value, { stream: true });
 
-                    // Clean tags from UI view, but keep them in 'text' logic
                     let displayHTML = renderMd(text.replace(/\[LEVEL_UP\]|\[END_INTERVIEW\]/g, ''));
-                    botEl.innerHTML = displayHTML;
+
+                    // Prevent showing an empty bubble if the LLM immediately terminated with no text
+                    if (displayHTML.trim() === "") {
+                        botEl.style.display = 'none';
+                    } else {
+                        botEl.style.display = '';
+                        botEl.innerHTML = displayHTML;
+                    }
+
                     chat.scrollTop = chat.scrollHeight;
                 }
 
@@ -425,22 +554,20 @@
                 if (text.includes('[LEVEL_UP]')) {
                     let currentLevelIdx = levelsOrder.indexOf(levelSelect.value);
                     if (currentLevelIdx < levelsOrder.length - 1) {
-                        // Level up logic
                         levelSelect.value = levelsOrder[currentLevelIdx + 1];
                         addBubble(`🎉 Passed! Moving up to ${levelSelect.value} level.`, 'system');
 
-                        // Reset for next level
                         currentQuestionNumber = 1;
-                        chatHistory = []; // Reset history so AI isn't bogged down
+                        chatHistory = [];
                         await processTurn(`[SYSTEM: The candidate leveled up. Ask Question 1 for the ${levelSelect.value} level.]`);
-                        return; // exit early so inputs stay disabled until new Q arrives
+                        return;
                     } else {
                         addBubble('🏆 Congratulations! You have successfully passed all levels of the interview!', 'system');
                         input.disabled = true; sendBtn.disabled = true;
                         return;
                     }
                 } else if (text.includes('[END_INTERVIEW]')) {
-                    addBubble('🛑 The interview has been concluded. Thank you for your time.', 'error');
+                    addBubble('🛑 The interview has been terminated due to an inadequate or invalid response.', 'error');
                     input.disabled = true; sendBtn.disabled = true;
                     return;
                 }
