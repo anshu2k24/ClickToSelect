@@ -112,6 +112,7 @@ def verify_init(req: VerifyInitRequest):
         except Exception as e:
             print(f"[ERROR] Failed to ingest GitHub URL during init: {e}")
 
+    # Create isolated memory block for this specific interview
     verification_sessions[session_id] = {
         "skill": req.skill_name,
         "repo_name": repo_name,
@@ -137,7 +138,6 @@ def verify_get_question(session_id: str):
     json_response = rag_qa.generate_json_llama(prompt)
 
     if "question" in json_response:
-        # Save interviewer's question to history
         session['history'].append({"role": "Interviewer", "content": json_response["question"]})
         return {"question": json_response["question"]}
     else:
@@ -146,6 +146,9 @@ def verify_get_question(session_id: str):
 
 @app.post("/api/verify/answer")
 def verify_post_answer(session_id: str, req: VerifyAnswerRequest):
+    """
+    Submits the candidate's answer and immediately returns the evaluation (score and level).
+    """
     if session_id not in verification_sessions:
         raise HTTPException(status_code=404, detail="Session not found")
     
@@ -153,17 +156,7 @@ def verify_post_answer(session_id: str, req: VerifyAnswerRequest):
     session['history'].append({"role": "Candidate", "content": req.candidate_response})
     session['q_num'] += 1
     
-    return {"status": "success"}
-
-
-@app.get("/api/verify/evaluation")
-def verify_get_evaluation(session_id: str):
-    if session_id not in verification_sessions:
-        raise HTTPException(status_code=404, detail="Session not found")
-    
-    session = verification_sessions[session_id]
-    
-    # We evaluate based on the last Candidate answer
+    # Immediately evaluate the answer
     search_query = session['skill']
     chunks = rag_qa.retrieve(search_query, [session['repo_name']] if session['repo_name'] else None, collection, embedder)
     context = "\n\n---\n\n".join(chunks) if chunks else ""
@@ -176,6 +169,19 @@ def verify_get_evaluation(session_id: str):
         session['level'] = json_response["level"]
         
     return {
+        "status": "success",
         "score": json_response.get("score", 0),
         "level": json_response.get("level", session['level'])
     }
+
+
+@app.delete("/api/verify/session")
+def verify_clear_session(session_id: str):
+    """
+    Call this endpoint when the interview is over to free up memory.
+    """
+    if session_id in verification_sessions:
+        del verification_sessions[session_id]
+        return {"status": "success", "message": f"Session {session_id} securely cleared from memory."}
+    
+    raise HTTPException(status_code=404, detail="Session not found")
