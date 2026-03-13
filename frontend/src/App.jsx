@@ -1,10 +1,11 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import CandidateRegister from "./pages/candidate/CandidateRegister";
+import AuthRegister      from "./pages/AuthRegister";
+import AuthLogin         from "./pages/AuthLogin";
 import CandidateProfile  from "./pages/candidate/Profile";
 import SkillVerify       from "./pages/candidate/SkillVerify";
-import RecruiterRegister from "./pages/recruiter/RecruiterRegister";
 import RecruiterProfile  from "./pages/recruiter/RecruiterProfile";
 import JobRole           from "./pages/recruiter/JobRole";
+import ProtectedRoute    from "./components/ProtectedRoute";
 
 function Home() {
   return (
@@ -19,12 +20,20 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/"                    element={<Home />} />
-        <Route path="/register"            element={<CandidateRegister />} />
-        <Route path="/profile"             element={<CandidateProfile />} />
-        <Route path="/skill-verify"        element={<SkillVerify />} />
-        <Route path="/recruiter/register"  element={<RecruiterRegister />} />
-        <Route path="/recruiter/profile"   element={<RecruiterProfile />} />
-        <Route path="/recruiter/job/:id"   element={<JobRole />} />
+
+        {/* Shared public auth */}
+        <Route path="/register"            element={<AuthRegister />} />
+        <Route path="/login"               element={<AuthLogin />} />
+        <Route path="/recruiter/register"  element={<Navigate to="/register" replace />} />
+        <Route path="/recruiter/login"     element={<Navigate to="/login" replace />} />
+
+        {/* Candidate protected */}
+        <Route path="/profile"             element={<ProtectedRoute role="candidate"><CandidateProfile /></ProtectedRoute>} />
+        <Route path="/skill-verify"        element={<ProtectedRoute role="candidate"><SkillVerify /></ProtectedRoute>} />
+
+        {/* Recruiter protected */}
+        <Route path="/recruiter/profile"   element={<ProtectedRoute role="recruiter"><RecruiterProfile /></ProtectedRoute>} />
+        <Route path="/recruiter/job/:id"   element={<ProtectedRoute role="recruiter"><JobRole /></ProtectedRoute>} />
 
         {/* Catch-all */}
         <Route path="*" element={<Navigate to="/" replace />} />

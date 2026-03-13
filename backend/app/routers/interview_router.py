@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from datetime import datetime
 
 from app.database.db import get_db
 from app.models.interview_model import Interview
@@ -91,3 +92,54 @@ def end_interview(
         "interview_id": interview_id,
         "status": "completed"
     }
+
+
+@router.get("/my")
+def get_my_interviews(
+    db: Session = Depends(get_db),
+    user=Depends(require_roles("candidate"))
+):
+
+    candidate = db.query(CandidateProfile).filter(
+        CandidateProfile.user_id == user["user_id"]
+    ).first()
+
+    if not candidate:
+        return []
+
+    rows = db.query(
+        InterviewCandidate,
+        Interview,
+        Job
+    ).join(
+        Interview,
+        InterviewCandidate.interview_id == Interview.id
+    ).join(
+        Job,
+        Interview.job_id == Job.id
+    ).filter(
+        InterviewCandidate.candidate_id == candidate.id
+    ).all()
+
+    payload = []
+
+    for interview_candidate, interview, job in rows:
+        status_raw = (interview_candidate.status or "pending").lower()
+        status = "COMPLETED" if status_raw in ["completed", "done"] else "UPCOMING"
+
+        payload.append({
+            "id": str(interview.id),
+            "role": job.role or job.title or "Interview",
+            "company": "Hiring Partner",
+            "company_logo": "🏢",
+            "scheduled_at": interview.interview_date.isoformat() if interview.interview_date else datetime.utcnow().isoformat(),
+            "duration_mins": interview.duration or 45,
+            "status": status,
+            "round": interview.interview_type or "Technical Round",
+            "interviewer": "AI + Recruiter Panel",
+            "ai_level": "Role-based assessment",
+            "accepted_at": datetime.utcnow().isoformat(),
+            "join_url": "#" if status == "UPCOMING" else None,
+        })
+
+    return payload

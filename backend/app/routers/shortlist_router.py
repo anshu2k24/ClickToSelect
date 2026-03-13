@@ -33,6 +33,14 @@ def shortlist_candidate(
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
 
+    existing = db.query(Shortlist).filter(
+        Shortlist.job_id == job_id,
+        Shortlist.candidate_id == candidate_id
+    ).first()
+
+    if existing:
+        return existing
+
     data = Shortlist(
 
         job_id=job_id,
@@ -48,3 +56,17 @@ def shortlist_candidate(
     db.refresh(data)
 
     return data
+
+
+@router.get("/job/{job_id}")
+def list_shortlisted_candidates(
+    job_id: str,
+    db: Session = Depends(get_db),
+    _=Depends(require_roles("recruiter"))
+):
+
+    shortlist = db.query(Shortlist).filter(
+        Shortlist.job_id == job_id
+    ).all()
+
+    return shortlist

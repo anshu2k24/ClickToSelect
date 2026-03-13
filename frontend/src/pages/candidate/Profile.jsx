@@ -1,6 +1,9 @@
 // src/pages/candidate/Profile.jsx
 import { useState, useEffect, useRef } from "react";
 import Header from "../../components/Header";
+import { getMyCandidateProfile, updateMyCandidateProfile } from "../../api/candidate";
+import { getMyInterviews } from "../../api/interview";
+import { listSkills, addSkill, deleteSkill } from "../../api/skill";
 
 /* ── Palette ── */
 const C = {
@@ -13,41 +16,6 @@ const C = {
   textDim: "rgba(255,255,255,0.52)",
   card:    "rgba(20,8,21,0.80)",
 };
-
-/* ── Mock candidate data ── */
-const MOCK_CANDIDATE = {
-  name:           "Rohan Sharma",
-  email:          "rohan.sharma@example.com",
-  organisation:   "NIT Trichy",
-  github_url:     "https://github.com/torvalds",
-  linkedin_url:   "https://linkedin.com/in/rohan",
-  leetcode_url:   "https://leetcode.com/u/neal_wu",
-  additional_urls:"https://rohandev.vercel.app",
-  previous_exp:   "2 years at Infosys as SDE-1. Built a microservices platform handling 100K RPM. Open source contributor to React ecosystem. Interned at Zepto during college.",
-};
-
-/* ── Mock interviews ── */
-const MOCK_INTERVIEWS = [
-  {
-    id: 1, role: "Senior Frontend Engineer", company: "Razorpay", company_logo: "💳",
-    scheduled_at: "2025-08-14T10:00:00", duration_mins: 60, status: "UPCOMING",
-    round: "Technical Round 1", interviewer: "AI + Human Evaluator",
-    ai_level: "Advanced DSA + System Design", accepted_at: "2025-08-10T14:22:00", join_url: "#",
-  },
-  {
-    id: 2, role: "Full Stack Developer", company: "Zepto", company_logo: "⚡",
-    scheduled_at: "2025-08-08T14:00:00", duration_mins: 45, status: "COMPLETED",
-    round: "Screening Round", interviewer: "AI Evaluator",
-    ai_level: "Problem Solving + React", accepted_at: "2025-08-05T09:11:00",
-    score: 82, feedback: "Strong frontend fundamentals. Needs work on system design depth.", join_url: null,
-  },
-  {
-    id: 3, role: "Backend Engineer", company: "CRED", company_logo: "🏆",
-    scheduled_at: "2025-08-20T11:30:00", duration_mins: 90, status: "UPCOMING",
-    round: "Final HR + Technical", interviewer: "Human Panel (2)",
-    ai_level: "Architecture + Culture Fit", accepted_at: "2025-08-12T17:45:00", join_url: "#",
-  },
-];
 
 /* ── Neural canvas ── */
 function NeuralCanvas() {
@@ -96,7 +64,6 @@ function NeuralCanvas() {
 
 /* ── Extract username from URL ── */
 const ghUser = url => { try { const p = new URL(url).pathname.split("/").filter(Boolean); return p[0] || null; } catch { return null; } };
-const lcUser = url => { try { const p = new URL(url).pathname.replace(/^\/u\/|^\//, "").split("/")[0]; return p || null; } catch { return null; } };
 
 /* ── GitHub Heatmap ── */
 function GithubHeatmap({ url }) {
@@ -111,23 +78,6 @@ function GithubHeatmap({ url }) {
         onError={e => { e.target.style.display="none"; e.target.nextSibling.style.display="flex"; }}
       />
       <div style={{ ...heatmapEmpty, display:"none" }}>Could not load GitHub heatmap</div>
-    </div>
-  );
-}
-
-/* ── LeetCode Heatmap ── */
-function LeetcodeHeatmap({ url }) {
-  const user = lcUser(url);
-  if (!user) return <div style={heatmapEmpty}>No LeetCode URL set</div>;
-  return (
-    <div style={{ width:"100%", overflowX:"auto" }}>
-      <img
-        src={`https://leetcard.jacoblin.com/${user}?theme=dark&font=source_code_pro&ext=heatmap&border=1&border_color=F638DC&background=200F21`}
-        alt={`${user} LeetCode stats`}
-        style={{ width:"100%", maxWidth:"500px", borderRadius:"8px" }}
-        onError={e => { e.target.style.display="none"; e.target.nextSibling.style.display="flex"; }}
-      />
-      <div style={{ ...heatmapEmpty, display:"none" }}>Could not load LeetCode stats</div>
     </div>
   );
 }
@@ -587,7 +537,7 @@ function SkillCard({ skill, onVerify, onDelete }) {
         {/* Action buttons */}
         <div style={{ display:"flex", flexDirection:"column", gap:"6px", flexShrink:0 }}>
           {!verified && !verifying && (
-            <button className="verify-btn" onClick={() => window.location.href=`/skill-verify?skill=${encodeURIComponent(skill.name)}`}>
+            <button className="verify-btn" onClick={() => onVerify(skill)}>
               <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><circle cx="5.5" cy="5.5" r="4.5" stroke="currentColor" strokeWidth="1.2"/><path d="M3.5 5.5L5 7L7.5 4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
               Verify Skill
             </button>
@@ -610,39 +560,162 @@ function SkillCard({ skill, onVerify, onDelete }) {
 
 /* ── Main ── */
 export default function Profile() {
-  const [data, setData]           = useState({ ...MOCK_CANDIDATE });
+  const [data, setData]           = useState(null);
+  const [loading, setLoading]     = useState(true);
   const [editing, setEditing]     = useState(false);
-  const [draft, setDraft]         = useState({ ...MOCK_CANDIDATE });
+  const [draft, setDraft]         = useState(null);
   const [saved, setSaved]         = useState(false);
   const [activeTab, setActiveTab] = useState("all");
+  const [interviews, setInterviews] = useState([]);
   const [skills, setSkills]           = useState([]);
   const [showAddSkill, setShowAddSkill] = useState(false);
+  const [skillError, setSkillError] = useState("");
 
-  const handleAddSkill = skill => {
-    setSkills(prev => [...prev, skill]);
-    setShowAddSkill(false);
-  };
-  const handleDeleteSkill = id => setSkills(prev => prev.filter(s => s.id !== id));
-  const handleVerifySkill = id => {
-    // Mark as verifying
-    setSkills(prev => prev.map(s => s.id === id ? { ...s, verifying: true } : s));
-    // Simulate AI verification delay (2–3.5s)
-    const delay = 2000 + Math.random() * 1500;
-    setTimeout(() => {
-      const score = Math.floor(65 + Math.random() * 35); // 65–99
-      setSkills(prev => prev.map(s => s.id === id ? { ...s, verifying: false, verified: true, score } : s));
-    }, delay);
+  useEffect(() => {
+    getMyCandidateProfile()
+      .then(res => {
+        const mapped = {
+          id:             res.id             || "",
+          name:           res.name           || "",
+          email:          res.email          || "",
+          organisation:   res.organisation   || "",
+          location:       res.location       || "",
+          mobile_no:      res.mobile_no      || "",
+          dob:            res.dob            || "",
+          experience_years: res.experience_years || 0,
+          github_url:     res.github_link    || "",
+          linkedin_url:   res.linkedin_link  || "",
+          resume_url:     res.resume_url     || "",
+        };
+        setData(mapped);
+        setDraft(mapped);
+
+        if (res?.id) {
+          listSkills(res.id)
+            .then((rows) => {
+              const normalized = Array.isArray(rows)
+                ? rows.map((item) => ({
+                  id: item.id,
+                  name: item.skill_name,
+                  githubUrl: item.github_url || "",
+                  verified: Number(item.score || 0) > 0,
+                  score: Number.isFinite(Number(item.score)) ? Math.round(Number(item.score)) : null,
+                  verifying: false,
+                }))
+                : [];
+              setSkills(normalized);
+            })
+            .catch(() => setSkills([]));
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+
+    getMyInterviews()
+      .then(res => setInterviews(Array.isArray(res) ? res : []))
+      .catch(() => setInterviews([]));
+  }, []);
+
+  const handleAddSkill = async (skill) => {
+    if (!skill?.name || !skill?.name.trim() || !data?.id) {
+      return;
+    }
+
+    setSkillError("");
+
+    try {
+      const created = await addSkill({
+        candidate_id: data.id,
+        skill_name: skill.name.trim(),
+        github_url: skill.githubUrl?.trim() || "",
+      });
+
+      const mapped = {
+        id: created?.id,
+        name: created?.skill_name || skill.name.trim(),
+        githubUrl: created?.github_url || skill.githubUrl?.trim() || "",
+        verified: Number(created?.score || 0) > 0,
+        score: Number.isFinite(Number(created?.score)) ? Math.round(Number(created.score)) : null,
+        verifying: false,
+      };
+
+      setSkills((prev) => [...prev, mapped]);
+      setShowAddSkill(false);
+    } catch (error) {
+      setSkillError(error?.message || "Failed to add skill. Please try again.");
+    }
   };
 
-  const interviews = MOCK_INTERVIEWS;
+  const handleDeleteSkill = async (id) => {
+    try {
+      await deleteSkill(id);
+    } catch {}
+    setSkills((prev) => prev.filter((s) => s.id !== id));
+  };
+
+  const handleVerifySkill = (skill) => {
+    if (!skill?.id) {
+      return;
+    }
+
+    window.location.href = `/skill-verify?skill=${encodeURIComponent(skill.name || "Skill")}&skillId=${encodeURIComponent(skill.id)}`;
+  };
+
   const upcoming   = interviews.filter(i=>i.status==="UPCOMING");
   const completed  = interviews.filter(i=>i.status==="COMPLETED");
   const filtered   = activeTab==="all" ? interviews : activeTab==="upcoming" ? upcoming : completed;
 
   const startEdit = () => { setDraft({...data}); setEditing(true); setSaved(false); };
   const cancelEdit= () => { setEditing(false); };
-  const saveEdit  = () => { setData({...draft}); setEditing(false); setSaved(true); setTimeout(()=>setSaved(false), 3000); };
+  const saveEdit  = async () => {
+    try {
+      await updateMyCandidateProfile({
+        mobile_no:        data.mobile_no || "",
+        dob:              data.dob || new Date().toISOString().split("T")[0],
+        experience_years: parseInt(draft.experience_years) || 0,
+        organisation:     draft.organisation || "",
+        location:         draft.location || data.location || "",
+        github_link:      draft.github_url || "",
+        linkedin_link:    draft.linkedin_url || "",
+        resume_url:       draft.resume_url || "",
+      });
+
+      setData({ ...data, ...draft });
+      setEditing(false);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch {
+      setEditing(false);
+    }
+  };
   const d = f => v => setDraft(prev=>({...prev,[f]:v}));
+
+  if (loading) return (
+    <>
+      <style>{GLOBAL}</style>
+      <Header />
+      <div style={{ minHeight:"calc(100vh - 68px)", background:"#200F21", display:"flex", alignItems:"center", justifyContent:"center" }}>
+        <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:"16px" }}>
+          <div style={{ width:40, height:40, borderRadius:"50%", border:"3px solid rgba(246,56,220,0.25)", borderTopColor:"#F638DC", animation:"spin 0.8s linear infinite" }} />
+          <span style={{ fontFamily:"'Space Mono',monospace", fontSize:"11px", color:"rgba(246,56,220,0.7)", letterSpacing:"0.1em" }}>LOADING PROFILE...</span>
+        </div>
+      </div>
+    </>
+  );
+
+  if (!data) return (
+    <>
+      <style>{GLOBAL}</style>
+      <Header />
+      <div style={{ minHeight:"calc(100vh - 68px)", background:"#200F21", display:"flex", alignItems:"center", justifyContent:"center" }}>
+        <div style={{ textAlign:"center", padding:"0 24px" }}>
+          <div style={{ fontSize:"40px", marginBottom:"16px" }}>📎</div>
+          <p style={{ fontFamily:"'Sora',sans-serif", fontSize:"16px", color:"rgba(255,255,255,0.5)", marginBottom:"16px" }}>Profile not found. Please complete registration first.</p>
+          <a href="/register" style={{ color:"#F638DC", fontFamily:"'Sora',sans-serif", fontWeight:"600" }}>Go to Registration →</a>
+        </div>
+      </div>
+    </>
+  );
 
   const initials = data.name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase();
 
@@ -762,21 +835,18 @@ export default function Profile() {
                   <InfoRow icon="👤" label="Full Name"    value={data.name} />
                   <InfoRow icon="📧" label="Email"        value={data.email} />
                   <InfoRow icon="🏢" label="Organisation" value={data.organisation} />
+                  <InfoRow icon="🧮" label="Experience (Years)" value={String(data.experience_years ?? "")} />
                   <InfoRow icon="🔗" label="LinkedIn"     value={data.linkedin_url}    link />
-                  <InfoRow icon="🌐" label="Additional"   value={data.additional_urls} link />
-                  <div style={{ marginTop:"10px" }}>
-                    <div style={{ fontFamily:"'Space Mono',monospace", fontSize:"9px", color:`rgba(246,56,220,0.65)`, letterSpacing:"0.10em", textTransform:"uppercase", marginBottom:"6px" }}>📋 Previous Experience</div>
-                    <p style={{ fontFamily:"'Sora',sans-serif", fontSize:"13px", color:"rgba(255,255,255,0.55)", lineHeight:"1.65", margin:0 }}>{data.previous_exp || "—"}</p>
-                  </div>
+                  <InfoRow icon="📄" label="Resume URL" value={data.resume_url} link />
                 </div>
               ) : (
                 <div style={{ display:"flex", flexDirection:"column", gap:"14px" }}>
                   <EditRow label="Full Name"          icon="👤" value={draft.name}           onChange={d("name")} />
                   <EditRow label="Email"              icon="📧" value={draft.email}          onChange={d("email")}          type="email" />
                   <EditRow label="Organisation"       icon="🏢" value={draft.organisation}   onChange={d("organisation")} />
+                  <EditRow label="Experience (Years)" icon="🧮" value={String(draft.experience_years ?? "")} onChange={d("experience_years")} type="number" />
                   <EditRow label="LinkedIn URL"       icon="🔗" value={draft.linkedin_url}   onChange={d("linkedin_url")} />
-                  <EditRow label="Additional URLs"    icon="🌐" value={draft.additional_urls} onChange={d("additional_urls")} />
-                  <EditRow label="Previous Experience" icon="📋" value={draft.previous_exp}  onChange={d("previous_exp")} multiline />
+                  <EditRow label="Resume URL"         icon="📄" value={draft.resume_url} onChange={d("resume_url")} />
                 </div>
               )}
             </SectionCard>
@@ -793,16 +863,6 @@ export default function Profile() {
                 )}
               </SectionCard>
 
-              <SectionCard title="LeetCode Performance" tag="DSA STATS">
-                {!editing ? (
-                  <div>
-                    <div style={{ marginBottom:"10px" }}><InfoRow icon="⚡" label="LeetCode URL" value={data.leetcode_url} link /></div>
-                    <LeetcodeHeatmap url={data.leetcode_url} />
-                  </div>
-                ) : (
-                  <EditRow label="LeetCode URL" icon="⚡" value={draft.leetcode_url} onChange={d("leetcode_url")} />
-                )}
-              </SectionCard>
             </div>
           </div>
 
@@ -906,6 +966,11 @@ export default function Profile() {
               {showAddSkill && (
                 <div style={{ padding:"0 28px", position:"relative", zIndex:2 }}>
                   <AddSkillPanel onSave={handleAddSkill} onCancel={() => setShowAddSkill(false)} />
+                  {skillError && (
+                    <div style={{ marginTop:"10px", fontFamily:"'Sora',sans-serif", fontSize:"12px", color:"#fca5a5" }}>
+                      {skillError}
+                    </div>
+                  )}
                 </div>
               )}
 

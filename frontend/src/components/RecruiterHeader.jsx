@@ -1,7 +1,27 @@
 // src/components/RecruiterHeader.jsx — DARK MODE
+import { useNavigate } from "react-router-dom";
+import { getSession, logout } from "../api/auth";
+
 const C = { vivid:"#A855F7", lite:"#C084FC", dark:"#2D0059", bg:"#1A0033", border:"rgba(168,85,247,0.18)" };
 
 export default function RecruiterHeader() {
+  const navigate = useNavigate();
+  const session = getSession();
+  const isRecruiterLoggedIn = !!session?.accessToken && session?.role === "recruiter";
+
+  const handleAuthClick = () => {
+    if (isRecruiterLoggedIn) {
+      logout();
+      navigate("/login");
+      return;
+    }
+    navigate("/login");
+  };
+
+  const handleRegisterClick = () => {
+    navigate("/register");
+  };
+
   return (
     <>
       <style>{`
@@ -68,17 +88,24 @@ export default function RecruiterHeader() {
             </div>
           </div>
 
-          <div style={{ display:"flex", alignItems:"center", gap:"32px" }}>
-            <nav style={{ display:"flex", alignItems:"center", gap:"28px" }}>
-              <a href="/recruiter/profile"  className="r-hdr-link">Dashboard</a>
-              <a href="/recruiter/profile"  className="r-hdr-link">Job Roles</a>
-              <a href="/recruiter/register" className="r-hdr-link">Register</a>
-            </nav>
-            <div style={{ display:"flex", alignItems:"center", gap:"6px", padding:"5px 12px", borderRadius:"100px", background:`rgba(168,85,247,0.09)`, border:`1px solid rgba(168,85,247,0.20)` }}>
-              <div style={{ width:6, height:6, borderRadius:"50%", background:C.vivid, boxShadow:`0 0 6px ${C.vivid}`, animation:"rHdrBlink 2s ease-in-out infinite" }} />
-              <span style={{ fontFamily:"'Space Mono',monospace", fontSize:"10px", color:`rgba(168,85,247,0.92)`, letterSpacing:"0.08em" }}>RECRUITER</span>
-            </div>
-            <button className="r-hdr-btn"><span>Sign In</span></button>
+          <div style={{ display:"flex", alignItems:"center", gap:"16px" }}>
+            {isRecruiterLoggedIn ? (
+              <>
+                <nav style={{ display:"flex", alignItems:"center", gap:"28px" }}>
+                  <a href="/recruiter/profile" className="r-hdr-link">Dashboard</a>
+                </nav>
+                <div style={{ display:"flex", alignItems:"center", gap:"6px", padding:"5px 12px", borderRadius:"100px", background:`rgba(168,85,247,0.09)`, border:`1px solid rgba(168,85,247,0.20)` }}>
+                  <div style={{ width:6, height:6, borderRadius:"50%", background:C.vivid, boxShadow:`0 0 6px ${C.vivid}`, animation:"rHdrBlink 2s ease-in-out infinite" }} />
+                  <span style={{ fontFamily:"'Space Mono',monospace", fontSize:"10px", color:`rgba(168,85,247,0.92)`, letterSpacing:"0.08em" }}>RECRUITER</span>
+                </div>
+                <button className="r-hdr-btn" onClick={handleAuthClick}><span>Logout</span></button>
+              </>
+            ) : (
+              <>
+                <button className="r-hdr-btn" onClick={handleRegisterClick}><span>Register</span></button>
+                <button className="r-hdr-btn" onClick={handleAuthClick}><span>Sign In</span></button>
+              </>
+            )}
           </div>
         </div>
       </header>

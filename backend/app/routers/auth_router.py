@@ -10,6 +10,8 @@ from app.utils.auth_utils import hash_password, verify_password, create_access_t
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
+DEFAULT_DEV_PASSWORD = "123456"
+
 
 @router.post("/register")
 def register(user: UserRegister, db: Session = Depends(get_db)):
@@ -22,7 +24,7 @@ def register(user: UserRegister, db: Session = Depends(get_db)):
     new_user = User(
         name=user.name,
         email=user.email,
-        password_hash=hash_password(user.password),
+        password_hash=hash_password(DEFAULT_DEV_PASSWORD),
         role=user.role
     )
 

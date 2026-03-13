@@ -1,7 +1,27 @@
 // src/components/Header.jsx — DARK MODE
+import { useNavigate } from "react-router-dom";
+import { getSession, logout } from "../api/auth";
+
 const C = { vivid:"#F638DC", lite:"#F990F0", dark:"#382039", bg:"#200F21", border:"rgba(246,56,220,0.18)" };
 
 export default function Header() {
+  const navigate = useNavigate();
+  const session = getSession();
+  const isCandidateLoggedIn = !!session?.accessToken && session?.role === "candidate";
+
+  const handleAuthClick = () => {
+    if (isCandidateLoggedIn) {
+      logout();
+      navigate("/login");
+      return;
+    }
+    navigate("/login");
+  };
+
+  const handleRegisterClick = () => {
+    navigate("/register");
+  };
+
   return (
     <>
       <style>{`
@@ -70,17 +90,25 @@ export default function Header() {
             </div>
           </div>
 
-          <div style={{ display:"flex", alignItems:"center", gap:"32px" }}>
-            <nav style={{ display:"flex", alignItems:"center", gap:"28px" }}>
-              <a href="/profile"      className="hdr-link">Profile</a>
-              <a href="/register"     className="hdr-link">Register</a>
-              <a href="/skill-verify" className="hdr-link">Skill Verify</a>
-            </nav>
-            <div style={{ display:"flex", alignItems:"center", gap:"6px", padding:"5px 12px", borderRadius:"100px", background:`rgba(246,56,220,0.08)`, border:`1px solid rgba(246,56,220,0.18)` }}>
-              <div style={{ width:6, height:6, borderRadius:"50%", background:C.vivid, boxShadow:`0 0 6px ${C.vivid}`, animation:"hdrBlink 2s ease-in-out infinite" }} />
-              <span style={{ fontFamily:"'Space Mono',monospace", fontSize:"10px", color:`rgba(246,56,220,0.90)`, letterSpacing:"0.08em" }}>CANDIDATE</span>
-            </div>
-            <button className="hdr-btn"><span>Sign In</span></button>
+          <div style={{ display:"flex", alignItems:"center", gap:"16px" }}>
+            {isCandidateLoggedIn ? (
+              <>
+                <nav style={{ display:"flex", alignItems:"center", gap:"28px" }}>
+                  <a href="/profile" className="hdr-link">Profile</a>
+                  <a href="/skill-verify" className="hdr-link">Skill Verify</a>
+                </nav>
+                <div style={{ display:"flex", alignItems:"center", gap:"6px", padding:"5px 12px", borderRadius:"100px", background:`rgba(246,56,220,0.08)`, border:`1px solid rgba(246,56,220,0.18)` }}>
+                  <div style={{ width:6, height:6, borderRadius:"50%", background:C.vivid, boxShadow:`0 0 6px ${C.vivid}`, animation:"hdrBlink 2s ease-in-out infinite" }} />
+                  <span style={{ fontFamily:"'Space Mono',monospace", fontSize:"10px", color:`rgba(246,56,220,0.90)`, letterSpacing:"0.08em" }}>CANDIDATE</span>
+                </div>
+                <button className="hdr-btn" onClick={handleAuthClick}><span>Logout</span></button>
+              </>
+            ) : (
+              <>
+                <button className="hdr-btn" onClick={handleRegisterClick}><span>Register</span></button>
+                <button className="hdr-btn" onClick={handleAuthClick}><span>Sign In</span></button>
+              </>
+            )}
           </div>
         </div>
       </header>

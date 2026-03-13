@@ -49,6 +49,24 @@ def list_jobs(db: Session = Depends(get_db)):
     jobs = db.query(Job).all()
 
     return jobs
+
+
+@router.get("/my-listings")
+def my_listings(
+    db: Session = Depends(get_db),
+    user=Depends(require_roles("recruiter"))
+):
+
+    recruiter = db.query(RecruiterProfile).filter(
+        RecruiterProfile.user_id == user["user_id"]
+    ).first()
+
+    if not recruiter:
+        raise HTTPException(status_code=404, detail="Recruiter profile not found")
+
+    jobs = db.query(Job).filter(Job.recruiter_id == recruiter.id).all()
+
+    return jobs
 @router.get("/{job_id}")
 def get_job(job_id: str, db: Session = Depends(get_db)):
 

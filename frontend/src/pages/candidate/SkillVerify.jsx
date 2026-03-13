@@ -1,6 +1,13 @@
 // src/pages/candidate/SkillVerify.jsx — DARK MODE
 import { useState, useEffect, useRef } from "react";
 import Header from "../../components/Header";
+import { startSkillBrain, answerSkillBrain } from "../../api/brain";
+import { getMyCandidateProfile } from "../../api/candidate";
+import { getMyInterviews } from "../../api/interview";
+import { listQuestions } from "../../api/question";
+import { submitAnswer as submitInterviewAnswer } from "../../api/answer";
+import { listSkills } from "../../api/skill";
+import { initCheatDetection } from "../../utils/cheat_detection";
 
 const C = {
   bg:"#200F21", dark:"#382039", mid:"#5A3D5C", vivid:"#F638DC",
@@ -9,14 +16,42 @@ const C = {
   text:"#FFFFFF", textMid:"rgba(255,255,255,0.78)", textDim:"rgba(255,255,255,0.52)",
 };
 
-const QUESTION_BANK = {
-  default:["Walk me through the core concepts behind this technology. What problems does it solve and when would you choose it over alternatives?","Describe a real project where you applied this skill. What challenges did you face and how did you overcome them?","What are the most common pitfalls or anti-patterns developers fall into with this technology? How do you avoid them?","How would you explain the performance implications and scaling considerations related to this skill?","Describe the testing strategy you follow when working with this technology."],
-  react:["Explain the React reconciliation algorithm and how the virtual DOM diffing works under the hood.","What is the difference between `useEffect` and `useLayoutEffect`? When would you use each?","Walk me through how you would architect a large-scale React application for maintainability and performance.","Explain React's fiber architecture and concurrent features like `useTransition`.","How do you handle complex global state? Compare Context API, Redux, Zustand, and Jotai."],
-  javascript:["Explain the JavaScript event loop in detail — call stack, task queue, microtask queue, and how async/await interacts.","What are closures? Give a real-world example.","Describe prototypal inheritance in JavaScript.","Differences between var, let, and const?","Explain how Promises work internally. How is async/await syntactic sugar?"],
-  python:["Explain Python's GIL — what it is, why it exists, and how it affects multithreaded programs.","Compare Python's generators and iterators. How do you use yield to build memory-efficient pipelines?","What are Python decorators? Write an example.","How does Python manage memory — reference counting, garbage collection?","What are metaclasses? When would you use them?"],
-  "node.js":["Explain the Node.js event loop phases: timers, I/O callbacks, idle, poll, check, and close callbacks.","How do you handle backpressure in Node.js streams?","Describe your approach to error handling in Express.js.","How would you design a high-throughput REST API in Node.js?","Explain clustering in Node.js and how PM2 improves CPU utilization."],
+const extractNumeric = (value) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
 };
-const getQuestions = skill => QUESTION_BANK[skill?.toLowerCase()] || QUESTION_BANK.default;
+
+const extractBrainScore = (payload) => {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const direct = [
+    payload.final_score,
+    payload.ai_score,
+    payload.score,
+    payload.last_score,
+    payload.avg_score,
+    payload.rating,
+    payload.result?.score,
+    payload.data?.score,
+  ];
+
+  for (const candidate of direct) {
+    const parsed = extractNumeric(candidate);
+    if (parsed !== null) {
+      return Math.max(0, Math.min(100, parsed));
+    }
+  }
+
+  const confidence = extractNumeric(payload.confidence ?? payload.result?.confidence ?? payload.data?.confidence);
+  if (confidence !== null) {
+    const scaled = confidence <= 1 ? confidence * 100 : confidence;
+    return Math.max(0, Math.min(100, scaled));
+  }
+
+  return null;
+};
 
 function TypedText({ text, onDone }) {
   const [displayed, setDisplayed] = useState("");
@@ -77,9 +112,10 @@ const GLOBAL=`
 `;
 
 export default function SkillVerify() {
-  const skill     = new URLSearchParams(window.location.search).get("skill")||"Your Skill";
-  const questions = getQuestions(skill);
-  const TOTAL     = questions.length;
+  const searchParams = new URLSearchParams(window.location.search);
+  const skill = searchParams.get("skill") || "Your Skill";
+  const querySkillId = searchParams.get("skillId") || searchParams.get("skill_id") || "";
+  const queryInterviewId = searchParams.get("interviewId") || searchParams.get("interview_id") || "";
   const [phase,setPhase]       = useState("intro");
   const [qIndex,setQIndex]     = useState(0);
   const [answer,setAnswer]     = useState("");
@@ -89,29 +125,346 @@ export default function SkillVerify() {
   const [submitted,setSub]     = useState(false);
   const [finalScore,setFS]     = useState(null);
   const [charCount,setCC]      = useState(0);
+  const [candidateId, setCandidateId] = useState("");
+  const [skillId, setSkillId] = useState(querySkillId);
+  const [skillLoading, setSkillLoading] = useState(false);
+  const [skillBrainStarted, setSkillBrainStarted] = useState(false);
+  const [effectiveInterviewId, setEffectiveInterviewId] = useState(queryInterviewId);
+  const [monitorStatus, setMonitorStatus] = useState("");
+  const [cheatEvents, setCheatEvents] = useState([]);
+  const [questions, setQuestions] = useState([]);
+  const [questionsLoading, setQuestionsLoading] = useState(false);
+  const [questionsError, setQuestionsError] = useState("");
+  const [scoreSamples, setScoreSamples] = useState([]);
+  const [skippedCount, setSkippedCount] = useState(0);
   const chatEndRef = useRef(null);
+  const videoRef = useRef(null);
   const MIN_CHARS  = 30;
+  const TOTAL = questions.length;
+  const isSkillOnlyFlow = Boolean(skillId) && !effectiveInterviewId;
   useEffect(()=>chatEndRef.current?.scrollIntoView({behavior:"smooth"}),[chatHistory,thinking]);
 
-  const startInterview = () => {
+  useEffect(() => {
+    getMyCandidateProfile()
+      .then((profile) => setCandidateId(profile?.id || ""))
+      .catch(() => setCandidateId(""));
+  }, []);
+
+  useEffect(() => {
+    if (querySkillId) {
+      setSkillId(querySkillId);
+      return;
+    }
+
+    if (!candidateId) {
+      setSkillId("");
+      setSkillBrainStarted(false);
+      return;
+    }
+
+    let cancelled = false;
+    setSkillLoading(true);
+
+    listSkills(candidateId)
+      .then((rows) => {
+        if (cancelled) {
+          return;
+        }
+
+        const allSkills = Array.isArray(rows) ? rows : [];
+        const normalizedSkill = String(skill || "").toLowerCase().trim();
+
+        const exactMatch = allSkills.find(
+          (entry) => String(entry?.skill_name || "").toLowerCase().trim() === normalizedSkill,
+        );
+        const fuzzyMatch = allSkills.find((entry) =>
+          String(entry?.skill_name || "").toLowerCase().includes(normalizedSkill),
+        );
+
+        const resolved = exactMatch || fuzzyMatch || allSkills[0] || null;
+        setSkillId(resolved?.id ? String(resolved.id) : "");
+        setSkillBrainStarted(false);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSkillId("");
+          setSkillBrainStarted(false);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setSkillLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [candidateId, skill, querySkillId]);
+
+  useEffect(() => {
+    if (querySkillId) {
+      setEffectiveInterviewId("");
+      return;
+    }
+
+    if (queryInterviewId) {
+      setEffectiveInterviewId(queryInterviewId);
+      return;
+    }
+
+    let cancelled = false;
+    const normalizedSkill = String(skill || "").toLowerCase().trim();
+
+    getMyInterviews()
+      .then((rows) => {
+        if (cancelled) {
+          return;
+        }
+
+        const all = Array.isArray(rows) ? rows : [];
+        if (!all.length) {
+          return;
+        }
+
+        const upcoming = all.filter((item) => String(item.status || "").toUpperCase() === "UPCOMING");
+        const matchBySkill = (item) => String(item.role || "").toLowerCase().includes(normalizedSkill);
+
+        const selected =
+          upcoming.find(matchBySkill) ||
+          all.find(matchBySkill) ||
+          upcoming[0] ||
+          all[0];
+
+        if (selected?.id) {
+          setEffectiveInterviewId(String(selected.id));
+          const params = new URLSearchParams(window.location.search);
+          params.set("interviewId", String(selected.id));
+          window.history.replaceState({}, "", `${window.location.pathname}?${params.toString()}`);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [queryInterviewId, skill, querySkillId]);
+
+  useEffect(() => {
+    if (!videoRef.current || !["intro", "qa"].includes(phase)) {
+      return undefined;
+    }
+
+    let cleanup = () => {};
+
+    initCheatDetection({
+      video: videoRef.current,
+      candidateId,
+      interviewId: effectiveInterviewId,
+      onStatusChange: setMonitorStatus,
+      onEvent: (event) => {
+        setCheatEvents((prev) => [event, ...prev].slice(0, 5));
+      },
+    })
+      .then((stop) => {
+        cleanup = stop;
+      })
+      .catch(() => {
+        setMonitorStatus("Unable to start cheat monitoring.");
+      });
+
+    return () => {
+      cleanup?.();
+    };
+  }, [phase, candidateId, effectiveInterviewId]);
+
+  useEffect(() => {
+    if (isSkillOnlyFlow) {
+      setQuestions([]);
+      setQuestionsLoading(false);
+      setQuestionsError("");
+      return;
+    }
+
+    if (!effectiveInterviewId) {
+      setQuestions([]);
+      setQuestionsError("Interview ID is missing and no candidate-linked interview could be resolved from backend.");
+      return;
+    }
+
+    let cancelled = false;
+    setQuestionsLoading(true);
+    setQuestionsError("");
+
+    listQuestions(effectiveInterviewId)
+      .then((rows) => {
+        if (cancelled) {
+          return;
+        }
+
+        const normalized = Array.isArray(rows)
+          ? rows.filter((row) => row?.id && row?.question_text)
+          : [];
+
+        setQuestions(normalized);
+        if (!normalized.length) {
+          setQuestionsError("No interview questions were found for this interview yet.");
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setQuestions([]);
+          setQuestionsError(error.message || "Failed to load interview questions from backend.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setQuestionsLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [effectiveInterviewId, isSkillOnlyFlow]);
+
+  const startInterview = async () => {
+    if (questionsLoading || !skillId || skillLoading || (!isSkillOnlyFlow && !TOTAL)) {
+      return;
+    }
+
+    let firstQuestionText = questions[0]?.question_text || "";
+
+    try {
+      const started = await startSkillBrain(skillId);
+      const questionFromBrain =
+        started?.question ||
+        started?.next_question ||
+        started?.data?.question ||
+        "";
+
+      if (isSkillOnlyFlow) {
+        firstQuestionText = questionFromBrain || firstQuestionText;
+      }
+
+      setSkillBrainStarted(true);
+    } catch (error) {
+      if (!String(error?.message || "").toLowerCase().includes("already running")) {
+        setMonitorStatus(error.message || "Failed to start AI skill interview session.");
+        return;
+      }
+      setSkillBrainStarted(true);
+    }
+
+    if (!firstQuestionText) {
+      setMonitorStatus("Skill interview started, but no first question was returned by backend.");
+      return;
+    }
+
+    if (isSkillOnlyFlow) {
+      setQuestions([{ id: `brain-0`, question_text: firstQuestionText }]);
+      setQIndex(0);
+    }
+
     setPhase("qa"); setThinking(true);
-    setTimeout(()=>{ setThinking(false); setCH([{id:Date.now(),role:"ai",text:questions[0],typing:true}]); },1200);
+    setTimeout(()=>{ setThinking(false); setCH([{id:Date.now(),role:"ai",text:firstQuestionText,typing:true}]); },1200);
   };
   const handleTypeDone = id => { setCH(prev=>prev.map(m=>m.id===id?{...m,typing:false}:m)); setTyping(false); };
-  const submitAnswer = () => {
-    if (!answer.trim()||answer.length<MIN_CHARS||submitted) return;
-    setCH(prev=>[...prev,{id:Date.now(),role:"user",text:answer.trim(),typing:false}]);
+  const handleSubmitAnswer = async ({ force = false } = {}) => {
+    if (!answer.trim() || (!force && answer.length < MIN_CHARS) || submitted) return;
+
+    const cleanedAnswer = answer.trim();
+    const currentQuestion = questions[qIndex];
+    if ((!currentQuestion?.id && !isSkillOnlyFlow) || !candidateId || !skillId) {
+      setMonitorStatus("Unable to submit answer because candidate or question context is missing.");
+      return;
+    }
+
+    setCH(prev=>[...prev,{id:Date.now(),role:"user",text:cleanedAnswer,typing:false}]);
     setSub(true); setAnswer(""); setCC(0);
+
+    let currentAnswerScore = null;
+    let brainResponse = null;
+
+    try {
+      if (effectiveInterviewId && currentQuestion?.id && !String(currentQuestion.id).startsWith("brain-")) {
+        await submitInterviewAnswer({
+          question_id: currentQuestion.id,
+          candidate_id: candidateId,
+          answer_text: cleanedAnswer,
+        });
+      }
+
+      if (!skillBrainStarted) {
+        await startSkillBrain(skillId);
+        setSkillBrainStarted(true);
+      }
+
+      brainResponse = await answerSkillBrain({
+        skillId,
+        candidateResponse: cleanedAnswer,
+      }).catch(() => null);
+
+      const scoreFromBrain = extractBrainScore(brainResponse);
+      if (scoreFromBrain === null) {
+        throw new Error("AI scoring service did not return a valid score.");
+      }
+      currentAnswerScore = scoreFromBrain;
+      setScoreSamples((prev) => [...prev, scoreFromBrain]);
+    } catch (error) {
+      setSub(false);
+      setMonitorStatus(error.message || "Failed to submit answer to backend.");
+      return;
+    }
+
     const next=qIndex+1;
+    const backendFinished = String(brainResponse?.message || "").toLowerCase().includes("interview finished");
+
+    if (isSkillOnlyFlow) {
+      if (backendFinished) {
+        setTimeout(()=>{ setThinking(true); setTimeout(()=>{ setThinking(false);
+          const totalScores = [...scoreSamples, ...(currentAnswerScore !== null ? [currentAnswerScore] : [])];
+          const avg = totalScores.length ? totalScores.reduce((sum, value) => sum + value, 0) / totalScores.length : 0;
+          const skippedPenalty = skippedCount * 8;
+          const sc = Math.max(0, Math.round(avg - skippedPenalty));
+          setFS(sc);
+          setCH(prev=>[...prev,{id:Date.now(),role:"ai",text:`Interview finished for ${skill}. Computing your verification score now...`,typing:true}]);
+          setTimeout(()=>setPhase("done"),3200); },1400); },500);
+        return;
+      }
+
+      const nextQuestionText =
+        brainResponse?.question ||
+        brainResponse?.next_question ||
+        brainResponse?.data?.question ||
+        "";
+
+      if (!nextQuestionText) {
+        setSub(false);
+        setMonitorStatus("Next question was not returned by backend.");
+        return;
+      }
+
+      setQuestions((prev) => [...prev, { id: `brain-${next}`, question_text: nextQuestionText }]);
+
+      setTimeout(()=>{ setThinking(true); setTimeout(()=>{ setThinking(false); setTyping(true); setCH(prev=>[...prev,{id:Date.now(),role:"ai",text:nextQuestionText,typing:true}]); setQIndex(next); setSub(false); },1400+Math.random()*800); },500);
+      return;
+    }
+
     if (next>=TOTAL) {
-      setTimeout(()=>{ setThinking(true); setTimeout(()=>{ setThinking(false); const sc=Math.floor(66+Math.random()*33); setFS(sc);
+      setTimeout(()=>{ setThinking(true); setTimeout(()=>{ setThinking(false);
+        const totalScores = [...scoreSamples, ...(currentAnswerScore !== null ? [currentAnswerScore] : [])];
+        const avg = totalScores.length ? totalScores.reduce((sum, value) => sum + value, 0) / totalScores.length : 0;
+        const skippedPenalty = skippedCount * 8;
+        const sc = Math.max(0, Math.round(avg - skippedPenalty));
+        setFS(sc);
         setCH(prev=>[...prev,{id:Date.now(),role:"ai",text:`Excellent! You've completed all ${TOTAL} questions for ${skill}. Computing your verification score now...`,typing:true}]);
         setTimeout(()=>setPhase("done"),3500); },1800); },600);
     } else {
-      setTimeout(()=>{ setThinking(true); setTimeout(()=>{ setThinking(false); setTyping(true); setCH(prev=>[...prev,{id:Date.now(),role:"ai",text:questions[next],typing:true}]); setQIndex(next); setSub(false); },1400+Math.random()*800); },500);
+      setTimeout(()=>{ setThinking(true); setTimeout(()=>{ setThinking(false); setTyping(true); setCH(prev=>[...prev,{id:Date.now(),role:"ai",text:questions[next].question_text,typing:true}]); setQIndex(next); setSub(false); },1400+Math.random()*800); },500);
     }
   };
-  const handleKeyDown = e => { if(e.key==="Enter"&&(e.ctrlKey||e.metaKey)) submitAnswer(); };
+  const handleKeyDown = e => { if(e.key==="Enter"&&(e.ctrlKey||e.metaKey)) handleSubmitAnswer(); };
 
   if (phase==="intro") return (
     <>
@@ -124,11 +477,14 @@ export default function SkillVerify() {
             <div style={{position:"absolute",top:0,left:"-80%",width:"55%",height:"100%",background:"linear-gradient(120deg,transparent,rgba(255,255,255,0.25),transparent)",animation:"sweep 2.5s ease-in-out infinite"}}/>🧠
           </div>
           <div style={{textAlign:"center",position:"relative",zIndex:1}}>
-            <div style={{fontFamily:"'Space Mono',monospace",fontSize:"10px",color:`rgba(246,56,220,0.85)`,letterSpacing:"0.14em",marginBottom:"12px",fontWeight:"700"}}>AI SKILL VERIFICATION · {TOTAL} QUESTIONS</div>
+            <div style={{fontFamily:"'Space Mono',monospace",fontSize:"10px",color:`rgba(246,56,220,0.85)`,letterSpacing:"0.14em",marginBottom:"12px",fontWeight:"700"}}>AI SKILL VERIFICATION · {TOTAL || 0} QUESTIONS</div>
             <h1 style={{fontFamily:"'Sora',sans-serif",fontWeight:"800",fontSize:"clamp(24px,4vw,32px)",color:"#fff",letterSpacing:"-0.04em",marginBottom:"14px"}}>
               Verifying: <span style={{background:`linear-gradient(135deg,${C.mid},${C.vivid})`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>{skill}</span>
             </h1>
-            <p style={{fontSize:"14px",color:C.textMid,lineHeight:"1.75",marginBottom:"32px",fontWeight:"500"}}>You will be asked {TOTAL} technical questions by an AI evaluator. Answer each thoroughly — quality and depth are scored, not speed.</p>
+            <p style={{fontSize:"14px",color:C.textMid,lineHeight:"1.75",marginBottom:"18px",fontWeight:"500"}}>{isSkillOnlyFlow ? "Questions and scoring are generated live by AI skill brain. Answer each thoroughly — quality and depth are scored, not speed." : "Questions and scoring are loaded from backend interview data. Answer each thoroughly — quality and depth are scored, not speed."}</p>
+            <div style={{marginBottom:"16px",padding:"10px 12px",borderRadius:"10px",background:"rgba(56,32,57,0.28)",border:`1px solid rgba(246,56,220,0.15)`,fontFamily:"'Sora',sans-serif",fontSize:"12px",color:questionsError?"#fca5a5":"rgba(255,255,255,0.72)",lineHeight:"1.5"}}>
+              {isSkillOnlyFlow ? `Skill selected with ID ${skillId}. Questions will stream from AI after start.` : (questionsLoading ? "Loading interview questions from backend..." : (questionsError || `Loaded ${TOTAL} backend interview questions.`))}
+            </div>
             <div style={{background:"rgba(56,32,57,0.38)",border:`1px solid rgba(246,56,220,0.15)`,borderRadius:"12px",padding:"18px 20px",marginBottom:"28px",textAlign:"left"}}>
               {[["🎯","Answer every question in depth — partial credit for partial answers"],["⏱️",`~${TOTAL*3}–${TOTAL*5} minutes total`],["💬","Chat panel on the left tracks the entire conversation"],["⌨️","Press Ctrl+Enter to submit your answer quickly"]].map(([icon,text])=>(
                 <div key={icon} style={{display:"flex",gap:"10px",alignItems:"flex-start",marginBottom:"10px"}}>
@@ -137,7 +493,12 @@ export default function SkillVerify() {
                 </div>
               ))}
             </div>
-            <button className="sv-submit-btn" style={{width:"100%",justifyContent:"center"}} onClick={startInterview}>Begin Verification Session →</button>
+            <div style={{background:"rgba(32,15,33,0.70)",border:`1px solid rgba(246,56,220,0.20)`,borderRadius:"12px",padding:"12px",marginBottom:"18px"}}>
+              <div style={{fontFamily:"'Space Mono',monospace",fontSize:"9px",color:`rgba(246,56,220,0.80)`,letterSpacing:"0.10em",marginBottom:"8px"}}>CAMERA PREVIEW</div>
+              <video ref={videoRef} autoPlay muted playsInline style={{width:"100%",aspectRatio:"4 / 3",objectFit:"cover",borderRadius:"10px",background:"#120813",border:`1px solid rgba(246,56,220,0.14)`}} />
+              <div style={{marginTop:"8px",fontFamily:"'Sora',sans-serif",fontSize:"11px",color:"rgba(255,255,255,0.58)",lineHeight:"1.5"}}>{monitorStatus || "Allow camera permission to start preview."}</div>
+            </div>
+            <button className="sv-submit-btn" style={{width:"100%",justifyContent:"center"}} onClick={startInterview} disabled={skillLoading || !skillId || (!isSkillOnlyFlow && (questionsLoading || !!questionsError || !TOTAL))}>Begin Verification Session →</button>
           </div>
         </div>
       </div>
@@ -165,8 +526,8 @@ export default function SkillVerify() {
     </>
   );
 
-  const canSubmit = answer.trim().length>=MIN_CHARS&&!submitted&&!typing;
-  const currentQ  = questions[qIndex];
+  const canSubmit = answer.trim().length>=MIN_CHARS&&!submitted&&!typing&&!!skillId;
+  const currentQ  = questions[qIndex]?.question_text || "";
   return (
     <>
       <style>{GLOBAL}</style><Header/>
@@ -182,8 +543,8 @@ export default function SkillVerify() {
             <div style={{fontFamily:"'Sora',sans-serif",fontWeight:"700",fontSize:"13px",color:"#fff",letterSpacing:"-0.02em",marginBottom:"10px"}}>{skill} Verification</div>
             <ProgressBar current={qIndex} total={TOTAL}/>
             <div style={{display:"flex",justifyContent:"space-between",marginTop:"6px"}}>
-              <span style={{fontFamily:"'Space Mono',monospace",fontSize:"9px",color:C.textDim,letterSpacing:"0.06em"}}>Q {qIndex+1}/{TOTAL}</span>
-              <span style={{fontFamily:"'Space Mono',monospace",fontSize:"9px",color:`rgba(246,56,220,0.72)`,letterSpacing:"0.06em"}}>{Math.round((qIndex/TOTAL)*100)}% COMPLETE</span>
+              <span style={{fontFamily:"'Space Mono',monospace",fontSize:"9px",color:C.textDim,letterSpacing:"0.06em"}}>Q {qIndex+1}/{Math.max(TOTAL,1)}</span>
+              <span style={{fontFamily:"'Space Mono',monospace",fontSize:"9px",color:`rgba(246,56,220,0.72)`,letterSpacing:"0.06em"}}>{Math.round((qIndex/Math.max(TOTAL,1))*100)}% COMPLETE</span>
             </div>
           </div>
           <div style={{flex:1,overflowY:"auto",padding:"16px 14px 8px"}}>
@@ -215,7 +576,7 @@ export default function SkillVerify() {
                   <div style={{position:"absolute",top:0,left:"-80%",width:"55%",height:"100%",background:"linear-gradient(120deg,transparent,rgba(255,255,255,0.28),transparent)",animation:"sweep 2.5s ease-in-out 0.5s infinite"}}/>🤖
                 </div>
                 <div>
-                  <div style={{fontFamily:"'Space Mono',monospace",fontSize:"9px",color:`rgba(246,56,220,0.88)`,letterSpacing:"0.12em",marginBottom:"2px",fontWeight:"700"}}>QUESTION {qIndex+1} OF {TOTAL}</div>
+                  <div style={{fontFamily:"'Space Mono',monospace",fontSize:"9px",color:`rgba(246,56,220,0.88)`,letterSpacing:"0.12em",marginBottom:"2px",fontWeight:"700"}}>QUESTION {qIndex+1} OF {Math.max(TOTAL,1)}</div>
                   <div style={{fontFamily:"'Sora',sans-serif",fontWeight:"600",fontSize:"13px",color:"rgba(255,255,255,0.62)",letterSpacing:"-0.02em"}}>{skill} · AI Interviewer</div>
                 </div>
               </div>
@@ -233,6 +594,30 @@ export default function SkillVerify() {
           {/* BOTTOM: Answer */}
           <div style={{flex:1,display:"flex",flexDirection:"column",padding:"20px 36px 24px",background:`rgba(18,8,19,0.85)`,position:"relative",overflow:"hidden"}}>
             <div style={{position:"absolute",bottom:"-80px",right:"-80px",width:"300px",height:"300px",borderRadius:"50%",background:`radial-gradient(circle,rgba(246,56,220,0.06) 0%,transparent 70%)`,pointerEvents:"none"}}/>
+            <div style={{display:"grid",gridTemplateColumns:"220px 1fr",gap:"16px",marginBottom:"16px",position:"relative",zIndex:1}}>
+              <div style={{background:"rgba(32,15,33,0.70)",border:`1px solid rgba(246,56,220,0.20)`,borderRadius:"14px",padding:"12px"}}>
+                <div style={{fontFamily:"'Space Mono',monospace",fontSize:"9px",color:`rgba(246,56,220,0.80)`,letterSpacing:"0.10em",marginBottom:"8px"}}>MONITOR CAMERA</div>
+                <video ref={videoRef} id="video" autoPlay muted style={{width:"100%",aspectRatio:"4 / 3",objectFit:"cover",borderRadius:"10px",background:"#120813",border:`1px solid rgba(246,56,220,0.14)`}} />
+                <div style={{marginTop:"8px",fontFamily:"'Sora',sans-serif",fontSize:"11px",color:"rgba(255,255,255,0.58)",lineHeight:"1.5"}}>
+                  {monitorStatus || "Camera monitoring starts when the interview begins."}
+                </div>
+              </div>
+              <div style={{background:"rgba(32,15,33,0.50)",border:`1px solid rgba(246,56,220,0.14)`,borderRadius:"14px",padding:"12px"}}>
+                <div style={{fontFamily:"'Space Mono',monospace",fontSize:"9px",color:`rgba(246,56,220,0.80)`,letterSpacing:"0.10em",marginBottom:"8px"}}>MONITOR EVENTS</div>
+                {cheatEvents.length === 0 ? (
+                  <div style={{fontFamily:"'Sora',sans-serif",fontSize:"12px",color:"rgba(255,255,255,0.45)"}}>No suspicious events reported in this session.</div>
+                ) : (
+                  <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
+                    {cheatEvents.map((event, index) => (
+                      <div key={`${event.type}-${index}`} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"10px",padding:"8px 10px",borderRadius:"10px",background:"rgba(246,56,220,0.08)",border:`1px solid rgba(246,56,220,0.16)`}}>
+                        <span style={{fontFamily:"'Sora',sans-serif",fontSize:"12px",color:"#fff"}}>⚠ {event.type.replaceAll("_", " ")}</span>
+                        <span style={{fontFamily:"'Space Mono',monospace",fontSize:"10px",color:`rgba(246,56,220,0.80)`}}>{Math.round(event.confidence * 100)}%</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"14px",position:"relative",zIndex:1}}>
               <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
                 <div style={{width:7,height:7,borderRadius:"50%",background:"rgba(255,255,255,0.35)",flexShrink:0}}/>
@@ -248,14 +633,14 @@ export default function SkillVerify() {
               <textarea className="sv-textarea" placeholder="Type your answer here. Be thorough — the AI evaluator rewards depth and clarity. Press Ctrl+Enter to submit." value={answer} disabled={submitted||typing} onChange={e=>{setAnswer(e.target.value);setCC(e.target.value.length);}} onKeyDown={handleKeyDown}/>
             </div>
             <div style={{display:"flex",alignItems:"center",gap:"12px",position:"relative",zIndex:1}}>
-              <button className="sv-submit-btn" disabled={!canSubmit} onClick={submitAnswer}>
+              <button className="sv-submit-btn" disabled={!canSubmit} onClick={handleSubmitAnswer}>
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 7H12M8 3L12 7L8 11" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                {qIndex<TOTAL-1?"Submit & Next Question":"Submit Final Answer"}
+                {isSkillOnlyFlow ? "Submit Answer" : (qIndex<TOTAL-1?"Submit & Next Question":"Submit Final Answer")}
               </button>
-              <button className="sv-skip-btn" disabled={submitted||typing} onClick={()=>{setAnswer("(Skipped)");setCC(10);setTimeout(()=>{setAnswer("");submitAnswer();},10);}}>Skip</button>
+              <button className="sv-skip-btn" disabled={submitted||typing} onClick={()=>{setSkippedCount(prev => prev + 1); setAnswer("(Skipped due to timeout)"); setCC(24); setTimeout(()=>{setAnswer("");handleSubmitAnswer({ force: true });},10);}}>Skip</button>
               {submitted&&<div style={{display:"flex",alignItems:"center",gap:"8px",animation:"fadeUp 0.3s ease"}}>
                 <div style={{width:10,height:10,borderRadius:"50%",border:"2px solid rgba(246,56,220,0.25)",borderTopColor:C.vivid,animation:"thinkBounce 0.8s linear infinite"}}/>
-                <span style={{fontFamily:"'Space Mono',monospace",fontSize:"10px",color:`rgba(246,56,220,0.75)`,letterSpacing:"0.06em",fontWeight:"700"}}>{qIndex<TOTAL-1?"PREPARING NEXT QUESTION...":"COMPUTING SCORE..."}</span>
+                <span style={{fontFamily:"'Space Mono',monospace",fontSize:"10px",color:`rgba(246,56,220,0.75)`,letterSpacing:"0.06em",fontWeight:"700"}}>{isSkillOnlyFlow ? "PROCESSING ANSWER..." : (qIndex<TOTAL-1?"PREPARING NEXT QUESTION...":"COMPUTING SCORE...")}</span>
               </div>}
             </div>
           </div>

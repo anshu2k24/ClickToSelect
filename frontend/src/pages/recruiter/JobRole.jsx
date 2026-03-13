@@ -1,19 +1,16 @@
 // src/pages/recruiter/JobRole.jsx — DARK MODE
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import RecruiterHeader from "../../components/RecruiterHeader";
+import { listCandidates } from "../../api/candidate";
+import { getCheatLogs } from "../../api/cheat";
+import { addInterviewCandidate, createInterview, startInterview } from "../../api/interview";
+import { getJob } from "../../api/job";
+import { getLeaderboard } from "../../api/report";
 
 const C={bg:"#0F0020",card:"rgba(20,0,45,0.90)",vivid:"#A855F7",lite:"#C084FC",dark:"#1A0033",border:"rgba(168,85,247,0.18)",text:"#FFFFFF",textMid:"rgba(255,255,255,0.78)",textDim:"rgba(255,255,255,0.52)"};
 const LL={fontFamily:"'Space Mono',monospace",fontSize:"9px",color:`rgba(168,85,247,0.80)`,letterSpacing:"0.12em",textTransform:"uppercase",fontWeight:"700"};
-
-const MOCK_CANDIDATES=[
-  {id:1,name:"Arjun Mehta",  email:"arjun@example.com", score:92,skills:["React","Node.js","TypeScript"],exp:"3 yrs",location:"Bengaluru",avatar:"AM",mailStatus:"idle"},
-  {id:2,name:"Priya Nair",   email:"priya@example.com", score:88,skills:["Python","ML","FastAPI"],       exp:"4 yrs",location:"Remote",   avatar:"PN",mailStatus:"idle"},
-  {id:3,name:"Rohan Sharma", email:"rohan@example.com", score:85,skills:["Java","Spring","AWS"],         exp:"2 yrs",location:"Pune",     avatar:"RS",mailStatus:"idle"},
-  {id:4,name:"Sneha Pillai", email:"sneha@example.com", score:81,skills:["Vue","Laravel","MySQL"],       exp:"3 yrs",location:"Chennai",  avatar:"SP",mailStatus:"idle"},
-  {id:5,name:"Dev Agarwal",  email:"dev@example.com",   score:79,skills:["Go","Docker","Kubernetes"],    exp:"5 yrs",location:"Hyderabad",avatar:"DA",mailStatus:"idle"},
-  {id:6,name:"Kavya Reddy",  email:"kavya@example.com", score:76,skills:["Android","Kotlin","Firebase"], exp:"2 yrs",location:"Bengaluru",avatar:"KR",mailStatus:"idle"},
-];
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const GLOBAL=`
   @import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap');
@@ -38,9 +35,8 @@ const GLOBAL=`
   .awaited-badge{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:8px;border:1px solid rgba(234,88,12,0.32);background:rgba(234,88,12,0.10);color:rgba(253,186,116,0.95);font-family:'Space Mono',monospace;font-size:10px;font-weight:700;letter-spacing:0.06em;}
 `;
 
-function CandidateCard({candidate,onSendMail}){
-  const{mailStatus,name,email,score,skills,exp,location,avatar}=candidate;
-  const isSending=mailStatus==="sending",isAwaited=mailStatus==="awaited",isAccepted=mailStatus==="accepted";
+function CandidateCard({candidate,onStartInterview}){
+  const{name,email,score,skills,exp,location,avatar,cheatCount,lastCheatEvent,interviewId}=candidate;
   const sc=score>=85?"#4ade80":score>=70?"#fbbf24":"#f87171";
   const sb=score>=85?"rgba(74,222,128,0.10)":score>=70?"rgba(251,191,36,0.10)":"rgba(248,113,113,0.10)";
   const sbr=score>=85?"rgba(74,222,128,0.30)":score>=70?"rgba(251,191,36,0.30)":"rgba(248,113,113,0.30)";
@@ -66,12 +62,12 @@ function CandidateCard({candidate,onSendMail}){
       <div style={{display:"flex",flexWrap:"wrap",gap:"5px",marginBottom:"12px"}}>
         {[["📍",location],["🕐",exp]].map(m=><div key={m[1]} style={{padding:"3px 8px",borderRadius:"5px",background:`rgba(168,85,247,0.09)`,border:`1px solid rgba(168,85,247,0.18)`,fontFamily:"'Space Mono',monospace",fontSize:"9px",color:`rgba(168,85,247,0.88)`,letterSpacing:"0.04em",fontWeight:"700"}}>{m[0]} {m[1]}</div>)}
         {skills.map(s=><div key={s} style={{padding:"3px 8px",borderRadius:"5px",background:"rgba(255,255,255,0.06)",border:`1px solid rgba(255,255,255,0.10)`,fontFamily:"'Sora',sans-serif",fontSize:"10px",color:C.textMid,fontWeight:"500"}}>{s}</div>)}
+        {cheatCount > 0 && <div style={{padding:"3px 8px",borderRadius:"5px",background:"rgba(248,113,113,0.12)",border:`1px solid rgba(248,113,113,0.30)`,fontFamily:"'Space Mono',monospace",fontSize:"9px",color:"#fca5a5",letterSpacing:"0.04em",fontWeight:"700"}}>⚠ {cheatCount} alerts</div>}
       </div>
+      {cheatCount > 0 && lastCheatEvent && <div style={{marginBottom:"10px",fontFamily:"'Sora',sans-serif",fontSize:"11px",color:"#fca5a5",fontWeight:"600"}}>Latest alert: {String(lastCheatEvent).replaceAll("_", " ")}</div>}
       <div style={{display:"flex",alignItems:"center",gap:"8px",flexWrap:"wrap"}}>
-        {mailStatus==="idle"   &&<button className="send-mail-btn" onClick={()=>onSendMail(candidate.id)}><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M1 2.5L6 6.5L11 2.5M1 2.5H11V9.5H1V2.5Z" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/></svg>Send Invite Mail</button>}
-        {isSending             &&<button className="send-mail-btn" disabled><div style={{width:10,height:10,borderRadius:"50%",border:"2px solid rgba(255,255,255,0.3)",borderTopColor:"#fff",animation:"rSpin 0.7s linear infinite"}}/>Sending…</button>}
-        {isAwaited             &&<><div className="awaited-badge"><div style={{width:6,height:6,borderRadius:"50%",background:"rgba(253,186,116,0.80)",animation:"rPulse 1.5s ease-in-out infinite"}}/>Response Awaited</div><span style={{fontFamily:"'Space Mono',monospace",fontSize:"9px",color:C.textDim,letterSpacing:"0.06em",fontWeight:"700"}}>AWAITING ACCEPTANCE</span></>}
-        {isAccepted            &&<><button className="start-int-btn" onClick={()=>window.open("/skill-verify","_blank")}><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><polygon points="3,1 11,6 3,11" fill="currentColor"/></svg>Start Interview</button><div style={{display:"inline-flex",alignItems:"center",gap:"5px",padding:"5px 10px",borderRadius:"6px",background:"rgba(22,163,74,0.12)",border:"1px solid rgba(22,163,74,0.30)",fontFamily:"'Space Mono',monospace",fontSize:"9px",color:"#4ade80",letterSpacing:"0.08em",fontWeight:"700"}}>✓ ACCEPTED</div></>}
+        <button className="start-int-btn" onClick={()=>onStartInterview(candidate)}><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><polygon points="3,1 11,6 3,11" fill="currentColor"/></svg>{interviewId ? "Restart Interview" : "Start Interview"}</button>
+        {interviewId && <div style={{display:"inline-flex",alignItems:"center",gap:"5px",padding:"5px 10px",borderRadius:"6px",background:"rgba(22,163,74,0.12)",border:"1px solid rgba(22,163,74,0.30)",fontFamily:"'Space Mono',monospace",fontSize:"9px",color:"#4ade80",letterSpacing:"0.08em",fontWeight:"700"}}>✓ LINKED</div>}
       </div>
     </div>
   );
@@ -79,19 +75,180 @@ function CandidateCard({candidate,onSendMail}){
 
 export default function JobRole(){
   const location=useLocation(),navigate=useNavigate(),{id}=useParams();
-  const job=location.state?.job||(()=>{try{return JSON.parse(localStorage.getItem("r_jobs")||"[]").find(j=>String(j.id)===String(id))||null;}catch{return null;}})();
-  const[candidates,setCandidates]=useState(MOCK_CANDIDATES);
+  const interviewId = new URLSearchParams(location.search).get("interviewId") || "";
+  const [job, setJob] = useState(location.state?.job || null);
+  const [jobLoading, setJobLoading] = useState(!location.state?.job && !!id);
+  const[candidates,setCandidates]=useState([]);
   const[sortBy,setSortBy]=useState("score");
+  const [cheatLogs, setCheatLogs] = useState([]);
+  const [pageError, setPageError] = useState("");
+  const activeInterviewIdsKey = candidates.map((candidate) => candidate.interviewId).filter(Boolean).sort().join("|");
 
-  const handleSendMail=async cId=>{
-    setCandidates(prev=>prev.map(c=>c.id===cId?{...c,mailStatus:"sending"}:c));
-    try{
-      await new Promise(r=>setTimeout(r,1800+Math.random()*800));
-      /* TODO replace with: const res=await fetch(`/api/v1/job/${id}/candidate/${cId}/invite`,{method:"POST"}); const {accepted}=await res.json(); */
-      const accepted=Math.random()>0.45;
-      setCandidates(prev=>prev.map(c=>c.id===cId?{...c,mailStatus:accepted?"accepted":"awaited"}:c));
-    }catch{setCandidates(prev=>prev.map(c=>c.id===cId?{...c,mailStatus:"idle"}:c));}
+  useEffect(() => {
+    if (location.state?.job) {
+      setJob(location.state.job);
+      setJobLoading(false);
+      return;
+    }
+
+    if (!id) {
+      setJob(null);
+      setJobLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setJobLoading(true);
+
+    getJob(id)
+      .then((jobRow) => {
+        if (!cancelled) {
+          setJob(jobRow || null);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setJob(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setJobLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id, location.state]);
+
+  useEffect(() => {
+    Promise.all([listCandidates(), getLeaderboard()])
+      .then(([candidateRows, leaderboardRows]) => {
+        const scores = new Map((leaderboardRows || []).map((row) => [row.candidate_id, row.avg_score]));
+        const mapped = (candidateRows || []).map((candidate) => ({
+          id: candidate.id,
+          name: candidate.name,
+          email: candidate.email,
+          score: Math.round(scores.get(candidate.id) || 0),
+          skills: [candidate.organisation || "Candidate"].filter(Boolean),
+          exp: `${candidate.experience_years || 0} yrs`,
+          location: candidate.location || "Unknown",
+          avatar: String(candidate.name || "C").split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase(),
+          interviewId: null,
+          cheatCount: 0,
+          lastCheatEvent: null,
+        }));
+        setCandidates(mapped);
+      })
+      .catch(() => {
+        setCandidates([]);
+        setPageError("Unable to load candidates from backend.");
+      });
+  }, []);
+
+  useEffect(() => {
+    if (!interviewId) {
+      setCheatLogs([]);
+      return;
+    }
+
+    getCheatLogs(interviewId)
+      .then((logs) => setCheatLogs(Array.isArray(logs) ? logs : []))
+      .catch(() => setCheatLogs([]));
+  }, [interviewId]);
+
+  useEffect(() => {
+    const interviewIds = activeInterviewIdsKey ? activeInterviewIdsKey.split("|") : [];
+    if (interviewIds.length === 0) {
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    const refreshLogs = async () => {
+      const entries = await Promise.all(
+        interviewIds.map(async (candidateInterviewId) => {
+          try {
+            const logs = await getCheatLogs(candidateInterviewId);
+            return [candidateInterviewId, Array.isArray(logs) ? logs : []];
+          } catch {
+            return [candidateInterviewId, []];
+          }
+        })
+      );
+
+      if (cancelled) {
+        return;
+      }
+
+      const logMap = new Map(entries);
+      setCandidates((prev) => prev.map((candidate) => {
+        if (!candidate.interviewId) {
+          return candidate;
+        }
+        const logs = logMap.get(candidate.interviewId) || [];
+        return {
+          ...candidate,
+          cheatCount: logs.length,
+          lastCheatEvent: logs[0]?.event_type || null,
+        };
+      }));
+    };
+
+    refreshLogs();
+    const intervalId = setInterval(refreshLogs, 15000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(intervalId);
+    };
+  }, [activeInterviewIdsKey]);
+
+  const handleStartInterview = async (candidate) => {
+    setPageError("");
+
+    if (!job?.id || !UUID_RE.test(String(job.id))) {
+      setPageError("This job is not backed by a real backend job record yet, so a tracked interview cannot be created.");
+      return;
+    }
+
+    if (!candidate?.id || !UUID_RE.test(String(candidate.id))) {
+      setPageError("This candidate is not backed by a real backend candidate record yet.");
+      return;
+    }
+
+    try {
+      const interview = await createInterview({
+        job_id: job.id,
+        interview_type: "individual",
+      });
+
+      const createdInterviewId = interview?.id || interview?.interview_id;
+      await addInterviewCandidate({
+        interview_id: createdInterviewId,
+        candidate_id: candidate.id,
+      });
+      await startInterview(createdInterviewId);
+
+      setCandidates((prev) => prev.map((row) => row.id === candidate.id ? {
+        ...row,
+        interviewId: createdInterviewId,
+      } : row));
+
+      window.open(`/skill-verify?skill=${encodeURIComponent(job.role || job.title || "Interview")}&interviewId=${encodeURIComponent(createdInterviewId)}`, "_blank");
+    } catch (error) {
+      setPageError(error.message || "Failed to create interview session.");
+    }
   };
+
+  if(jobLoading) return(
+    <><style>{GLOBAL}</style><RecruiterHeader/>
+      <div style={{minHeight:"calc(100vh - 68px)",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div style={{textAlign:"center",fontFamily:"'Sora',sans-serif",color:C.textMid}}>Loading job details...</div>
+      </div>
+    </>
+  );
 
   if(!job) return(
     <><style>{GLOBAL}</style><RecruiterHeader/>
@@ -106,14 +263,15 @@ export default function JobRole(){
   );
 
   const sorted=([...candidates]).sort((a,b)=>sortBy==="score"?b.score-a.score:a.name.localeCompare(b.name));
-  const acceptedCount=candidates.filter(c=>c.mailStatus==="accepted").length;
-  const awaitedCount=candidates.filter(c=>c.mailStatus==="awaited").length;
+  const monitoredCount=candidates.filter(c=>Boolean(c.interviewId)).length;
+  const flaggedCount=candidates.filter(c=>(c.cheatCount||0)>0).length;
+  const totalAlerts=candidates.reduce((sum,c)=>sum+(c.cheatCount||0),0);
+  const highRiskCount=candidates.filter(c=>(c.cheatCount||0)>=3).length;
 
   return(
     <><style>{GLOBAL}</style><RecruiterHeader/>
       <div style={{minHeight:"calc(100vh - 68px)",background:C.bg,fontFamily:"'Sora',sans-serif",paddingBottom:"80px"}}>
         <div style={{maxWidth:"1160px",margin:"0 auto",padding:"44px 28px 0"}}>
-          {/* Breadcrumb */}
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"26px",flexWrap:"wrap",gap:"10px"}}>
             <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
               <span style={{fontFamily:"'Space Mono',monospace",fontSize:"10px",color:C.textDim,letterSpacing:"0.08em",cursor:"pointer",fontWeight:"700"}} onClick={()=>navigate("/recruiter/profile")}>RECRUITER</span>
@@ -125,7 +283,6 @@ export default function JobRole(){
             <button className="jd-back-btn" onClick={()=>navigate("/recruiter/profile")}>← Back to Profile</button>
           </div>
 
-          {/* Job details */}
           <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:"22px",padding:"28px 32px",boxShadow:"0 8px 50px rgba(0,0,0,0.60)",position:"relative",overflow:"hidden",marginBottom:"20px",animation:"rFU 0.5s ease both"}}>
             <div style={{position:"absolute",top:0,left:0,right:0,height:"3px",background:`linear-gradient(90deg,transparent,${C.vivid},${C.lite},transparent)`,backgroundSize:"300% 100%",animation:"rBF 3s linear infinite"}}/>
             <div style={{display:"flex",alignItems:"flex-start",gap:"18px",flexWrap:"wrap",marginBottom:"18px"}}>
@@ -150,7 +307,7 @@ export default function JobRole(){
                 </div>
               </div>
               <div style={{display:"flex",gap:"10px",flexWrap:"wrap"}}>
-                {[["Candidates",candidates.length],["Accepted",acceptedCount],["Awaiting",awaitedCount]].map(([l,v])=>(
+                {[["Candidates",candidates.length],["Monitored",monitoredCount],["High Risk",highRiskCount],["Alerts",totalAlerts]].map(([l,v])=>(
                   <div key={l} style={{display:"flex",flexDirection:"column",alignItems:"center",padding:"10px 14px",borderRadius:"10px",background:`rgba(168,85,247,0.08)`,border:`1px solid rgba(168,85,247,0.18)`}}>
                     <span style={{fontFamily:"'Sora',sans-serif",fontWeight:"800",fontSize:"18px",color:C.lite,letterSpacing:"-0.03em"}}>{v}</span>
                     <span style={{fontFamily:"'Space Mono',monospace",fontSize:"8px",color:C.textDim,letterSpacing:"0.08em",textTransform:"uppercase",marginTop:"2px",fontWeight:"700"}}>{l}</span>
@@ -166,7 +323,6 @@ export default function JobRole(){
             )}
           </div>
 
-          {/* Candidates */}
           <div style={{animation:"rFU 0.5s 0.12s ease both"}}>
             <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:"20px",boxShadow:"0 6px 40px rgba(0,0,0,0.55)",position:"relative",overflow:"hidden"}}>
               <div style={{position:"absolute",top:0,left:0,right:0,height:"2.5px",background:`linear-gradient(90deg,transparent,${C.vivid},${C.lite},transparent)`,backgroundSize:"200% 100%",animation:"rBF 3s linear infinite"}}/>
@@ -179,7 +335,7 @@ export default function JobRole(){
                       <span style={{...LL,color:`rgba(168,85,247,0.88)`}}>{candidates.length} MATCHED</span>
                     </div>
                   </div>
-                  <p style={{fontFamily:"'Sora',sans-serif",fontSize:"12px",color:C.textDim,margin:0,fontWeight:"500"}}>Ranked by AI score — send invite mail to shortlisted candidates</p>
+                  <p style={{fontFamily:"'Sora',sans-serif",fontSize:"12px",color:C.textDim,margin:0,fontWeight:"500"}}>Ranked by backend score — start tracked interviews directly.</p>
                 </div>
                 <div style={{display:"flex",gap:"5px",background:"rgba(255,255,255,0.04)",padding:"4px",borderRadius:"9px",border:"1px solid rgba(255,255,255,0.06)"}}>
                   {[["score","By Score"],["name","By Name"]].map(([key,label])=>(
@@ -193,8 +349,43 @@ export default function JobRole(){
                 ))}
               </div>
               <div style={{padding:"18px 26px 26px"}}>
+                {pageError && <div style={{marginBottom:"16px",padding:"12px 14px",borderRadius:"12px",background:"rgba(248,113,113,0.10)",border:`1px solid rgba(248,113,113,0.30)`,fontFamily:"'Sora',sans-serif",fontSize:"12px",color:"#fecaca"}}>{pageError}</div>}
+                <div style={{marginBottom:"18px",padding:"16px",borderRadius:"14px",background:`rgba(168,85,247,0.08)`,border:`1px solid rgba(168,85,247,0.18)`}}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px",marginBottom:"12px",flexWrap:"wrap"}}>
+                    <div style={{fontFamily:"'Sora',sans-serif",fontSize:"14px",fontWeight:"700",color:"#fff"}}>Live Interview Monitoring</div>
+                    <div style={{fontFamily:"'Space Mono',monospace",fontSize:"10px",color:`rgba(168,85,247,0.85)`}}>{monitoredCount ? `${monitoredCount} active tracked interview${monitoredCount > 1 ? "s" : ""}` : "No tracked interviews started yet"}</div>
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:"10px"}}>
+                    {[["👁","Monitored",monitoredCount,"#c084fc"],["⚠","Flagged Candidates",flaggedCount,flaggedCount?"#fca5a5":"#c084fc"],["🚨","Total Alerts",totalAlerts,totalAlerts?"#f87171":"#c084fc"],["⛔","High Risk",highRiskCount,highRiskCount?"#fb7185":"#c084fc"]].map(([icon,label,value,color])=>(
+                      <div key={label} style={{padding:"12px 14px",borderRadius:"12px",background:"rgba(255,255,255,0.04)",border:`1px solid rgba(168,85,247,0.12)`}}>
+                        <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"5px"}}><span style={{fontSize:"14px"}}>{icon}</span><span style={{...LL,color:`rgba(168,85,247,0.75)`}}>{label}</span></div>
+                        <div style={{fontFamily:"'Sora',sans-serif",fontSize:"22px",fontWeight:"800",color,letterSpacing:"-0.03em"}}>{value}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {interviewId && (
+                  <div style={{marginBottom:"18px",padding:"14px 16px",borderRadius:"14px",background:`rgba(168,85,247,0.08)`,border:`1px solid rgba(168,85,247,0.18)`}}>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px",marginBottom:"10px",flexWrap:"wrap"}}>
+                      <div style={{fontFamily:"'Sora',sans-serif",fontSize:"14px",fontWeight:"700",color:"#fff"}}>Cheat Detection Alerts</div>
+                      <div style={{fontFamily:"'Space Mono',monospace",fontSize:"10px",color:`rgba(168,85,247,0.85)`}}>INTERVIEW {interviewId.slice(0, 8)}...</div>
+                    </div>
+                    {cheatLogs.length === 0 ? (
+                      <div style={{fontFamily:"'Sora',sans-serif",fontSize:"12px",color:C.textDim}}>No cheating logs reported for this interview yet.</div>
+                    ) : (
+                      <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
+                        {cheatLogs.slice(0, 8).map((log) => (
+                          <div key={log.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"10px",padding:"10px 12px",borderRadius:"10px",background:"rgba(255,255,255,0.04)",border:`1px solid rgba(168,85,247,0.12)`}}>
+                            <span style={{fontFamily:"'Sora',sans-serif",fontSize:"12px",color:"#fff"}}>⚠ {String(log.event_type || "unknown").replaceAll("_", " ")}</span>
+                            <span style={{fontFamily:"'Space Mono',monospace",fontSize:"10px",color:`rgba(168,85,247,0.85)`}}>{Math.round((Number(log.confidence) || 0) * 100)}%</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
                 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(320px,1fr))",gap:"14px"}}>
-                  {sorted.map(c=><CandidateCard key={c.id} candidate={c} onSendMail={handleSendMail}/>)}
+                  {sorted.map(c=><CandidateCard key={c.id} candidate={c} onStartInterview={handleStartInterview}/>)}
                 </div>
               </div>
               <div style={{borderTop:`1px solid rgba(168,85,247,0.06)`,padding:"12px 26px",display:"flex",alignItems:"center",gap:"10px"}}>

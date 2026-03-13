@@ -62,3 +62,38 @@ def delete_skill(skill_id: str, db: Session = Depends(get_db)):
     db.commit()
 
     return {"message": "skill deleted"}
+
+
+@router.put("/{skill_id}/verify")
+def verify_skill(
+    skill_id: str,
+    score: float,
+    feedback: str = "",
+    db: Session = Depends(get_db),
+    user=Depends(require_roles("candidate"))
+):
+
+    skill = db.query(CandidateSkill).filter(
+        CandidateSkill.id == skill_id
+    ).first()
+
+    if not skill:
+        raise HTTPException(status_code=404, detail="Skill not found")
+
+    candidate = db.query(CandidateProfile).filter(
+        CandidateProfile.id == skill.candidate_id
+    ).first()
+
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    if str(candidate.user_id) != user["user_id"]:
+        raise HTTPException(status_code=403, detail="Cannot verify another candidate's skill")
+
+    skill.score = score
+    skill.feedback = feedback
+
+    db.commit()
+    db.refresh(skill)
+
+    return skill

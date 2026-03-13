@@ -1,6 +1,9 @@
 // src/pages/candidate/CandidateRegister.jsx
 import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import Header from "../../components/Header";
+import { authenticate } from "../../api/auth";
+import { createCandidateProfile } from "../../api/candidate";
 
 /* ── New Palette ── */
 const C = {
@@ -353,15 +356,40 @@ export default function CandidateRegister() {
   const [step, setStep]           = useState(1);
   const [submitted, setSubmitted] = useState(false);
 
-  const [personal, setPersonal] = useState({ name:"", email:"", phone:"", dob:"", organisation:"", location:"", gender:"" });
-  const [professional, setProfessional] = useState({ github_url:"", linkedin_url:"", leetcode_url:"", additional_urls:"", previous_exp:"" });
+  const [personal, setPersonal] = useState({ name:"", email:"", password:"", phone:"", dob:"", organisation:"", location:"", gender:"" });
+  const [professional, setProfessional] = useState({ github_url:"", linkedin_url:"", leetcode_url:"", additional_urls:"", previous_exp:"", experience_years:"0" });
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState("");
+  const navigate = useNavigate();
 
   const p  = f => e => setPersonal({ ...personal, [f]: e.target.value });
   const pr = f => e => setProfessional({ ...professional, [f]: e.target.value });
 
   const next   = e => { e.preventDefault(); setStep(2); window.scrollTo({ top:0, behavior:"smooth" }); };
   const back   = ()  => { setStep(1); window.scrollTo({ top:0, behavior:"smooth" }); };
-  const submit = e => { e.preventDefault(); setSubmitted(true); };
+  const submit = async e => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+    try {
+      await authenticate({ name: personal.name, email: personal.email, password: personal.password, role: "candidate" });
+      await createCandidateProfile({
+        mobile_no: personal.phone,
+        dob: personal.dob,
+        experience_years: parseInt(professional.experience_years) || 0,
+        organisation: personal.organisation || "",
+        location: personal.location,
+        github_link: professional.github_url || "",
+        linkedin_link: professional.linkedin_url || "",
+      });
+      setSubmitted(true);
+      setTimeout(() => navigate("/profile"), 2000);
+    } catch (err) {
+      setError(err.message || "Registration failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <>
@@ -531,6 +559,7 @@ export default function CandidateRegister() {
                     <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"16px 26px", position:"relative", zIndex:1 }}>
                       <Field label="Full Name"       placeholder="e.g. Rohan Sharma"     value={personal.name}         onChange={p("name")}         required colSpan />
                       <Field label="Email"      type="email" placeholder="you@example.com"      value={personal.email}        onChange={p("email")}        required />
+                      <Field label="Password (used for login)"   type="password" placeholder="Create your password"  value={personal.password}     onChange={p("password")}     required colSpan />
                       <Field label="Phone"      type="tel"   placeholder="+91 98765 43210"       value={personal.phone}        onChange={p("phone")}        required />
                       <Field label="Date of Birth" type="date"                                    value={personal.dob}          onChange={p("dob")}          required />
                       <Field label="Organisation"   placeholder="Company / College"        value={personal.organisation} onChange={p("organisation")} />
@@ -558,6 +587,7 @@ export default function CandidateRegister() {
                     <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"16px 26px", position:"relative", zIndex:1 }}>
                       <Field label="GitHub URL"      placeholder="https://github.com/username"      value={professional.github_url}      onChange={pr("github_url")} />
                       <Field label="LinkedIn URL"    placeholder="https://linkedin.com/in/username" value={professional.linkedin_url}    onChange={pr("linkedin_url")} />
+                      <Field label="Years of Experience" type="number" placeholder="0"             value={professional.experience_years} onChange={pr("experience_years")} required />
                       <Field label="LeetCode URL"    placeholder="https://leetcode.com/username"    value={professional.leetcode_url}    onChange={pr("leetcode_url")} />
                       <Field label="Additional URLs" placeholder="Portfolio, Dribbble, etc."        value={professional.additional_urls} onChange={pr("additional_urls")} />
                       <TextArea
@@ -567,9 +597,14 @@ export default function CandidateRegister() {
                         onChange={pr("previous_exp")}
                       />
                     </div>
+                    {error && (
+                      <div style={{ gridColumn:"1/-1", background:"rgba(255,60,60,0.10)", border:"1px solid rgba(255,60,60,0.30)", borderRadius:"8px", padding:"10px 14px", fontFamily:"'Sora',sans-serif", fontSize:"13px", color:"#ff8080", lineHeight:"1.5", marginTop:"8px" }}>
+                        {error}
+                      </div>
+                    )}
                     <div style={{ display:"flex", gap:"10px", marginTop:"22px", position:"relative", zIndex:1 }}>
                       <button type="button" className="btn-back" onClick={back}>← Back</button>
-                      <button type="submit" className="btn-primary" style={{ marginTop:0 }}>Launch My Profile ✦</button>
+                      <button type="submit" className="btn-primary" style={{ marginTop:0 }} disabled={loading}>{loading ? "Creating Profile…" : "Launch My Profile ✦"}</button>
                     </div>
                   </form>
                 )}
@@ -577,7 +612,7 @@ export default function CandidateRegister() {
 
               <p style={{ textAlign:"center", marginTop:"22px", fontSize:"13px", color:C.textDim, fontFamily:"'Plus Jakarta Sans',sans-serif" }}>
                 Already registered?{" "}
-                <span className="signin-link">Sign in here</span>
+                <span className="signin-link" onClick={() => navigate("/login")}>Sign in here</span>
               </p>
             </>
           ) : (
@@ -618,7 +653,7 @@ export default function CandidateRegister() {
                 ))}
               </div>
 
-              <button className="btn-primary" style={{ width:"auto", padding:"14px 48px" }}>
+              <button className="btn-primary" style={{ width:"auto", padding:"14px 48px" }} onClick={() => navigate("/profile")}>
                 Enter Dashboard →
               </button>
             </div>

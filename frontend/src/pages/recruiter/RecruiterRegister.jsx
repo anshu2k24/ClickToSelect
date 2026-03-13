@@ -1,6 +1,9 @@
 // src/pages/recruiter/RecruiterRegister.jsx — DARK MODE
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import RecruiterHeader from "../../components/RecruiterHeader";
+import { authenticate } from "../../api/auth";
+import { createRecruiterProfile } from "../../api/recruiter";
 
 const C = {
   bg:"#0F0020", dark:"#1A0033", mid:"#2D0059", vivid:"#A855F7", lite:"#C084FC",
@@ -63,17 +66,32 @@ function FloatLabel({label,required,children}){
 }
 
 export default function RecruiterRegister() {
-  const [form,setForm]=useState({company_name:"",company_description:"",company_website:"",location:""});
+  const [form,setForm]=useState({name:"",email:"",password:"",company_name:"",company_description:"",company_website:"",location:""});
   const [submitting,setSubmitting]=useState(false);
   const [done,setDone]=useState(false);
+  const [error,setError]=useState("");
+  const navigate = useNavigate();
   const f=k=>e=>setForm(p=>({...p,[k]:e.target.value}));
-  const valid=form.company_name.trim()&&form.location.trim();
+  const valid=form.name.trim()&&form.email.trim()&&form.password.trim()&&form.company_name.trim()&&form.location.trim();
 
   const handleSubmit=async e=>{
     e.preventDefault(); if(!valid||submitting) return;
-    setSubmitting(true);
-    await new Promise(r=>setTimeout(r,1600));
-    setSubmitting(false); setDone(true);
+    setSubmitting(true); setError("");
+    try {
+      await authenticate({ name: form.name, email: form.email, password: form.password, role: "recruiter" });
+      await createRecruiterProfile({
+        company_name: form.company_name,
+        company_description: form.company_description,
+        company_website: form.company_website,
+        location: form.location,
+      });
+      setDone(true);
+      setTimeout(() => navigate("/recruiter/profile"), 2000);
+    } catch (err) {
+      setError(err.message || "Registration failed. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (done) return (
@@ -123,6 +141,20 @@ export default function RecruiterRegister() {
 
             <form onSubmit={handleSubmit} style={{position:"relative",zIndex:1}}>
               <div style={{display:"flex",flexDirection:"column",gap:"16px"}}>
+                {/* Account Fields */}
+                <FloatLabel label="Your Full Name" required>
+                  <input className="rr-input" placeholder="e.g. Priya Mehta" value={form.name} onChange={f("name")} required/>
+                </FloatLabel>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"14px"}}>
+                  <FloatLabel label="Email" required>
+                    <input className="rr-input" type="email" placeholder="you@company.com" value={form.email} onChange={f("email")} required/>
+                  </FloatLabel>
+                  <FloatLabel label="Password" required>
+                    <input className="rr-input" type="password" placeholder="Min 8 characters" value={form.password} onChange={f("password")} required/>
+                  </FloatLabel>
+                </div>
+                <div style={{height:"1px",background:"rgba(168,85,247,0.12)",margin:"2px 0"}}/>
+                {/* Company Fields */}
                 <FloatLabel label="Company Name" required>
                   <input className="rr-input" placeholder="e.g. Razorpay Technologies" value={form.company_name} onChange={f("company_name")} required/>
                 </FloatLabel>
@@ -148,6 +180,11 @@ export default function RecruiterRegister() {
                   </div>
                 )}
 
+                {error && (
+                  <div style={{background:"rgba(255,60,60,0.10)",border:"1px solid rgba(255,60,60,0.30)",borderRadius:"8px",padding:"10px 14px",fontFamily:"'Sora',sans-serif",fontSize:"13px",color:"#ff8080",lineHeight:"1.5"}}>
+                    {error}
+                  </div>
+                )}
                 <button type="submit" className="rr-submit" disabled={!valid||submitting}>
                   {submitting?<><div style={{width:16,height:16,borderRadius:"50%",border:"2px solid rgba(255,255,255,0.30)",borderTopColor:"#fff",animation:"rSpin 0.7s linear infinite"}}/>Creating Account…</>:<>Create Recruiter Account →</>}
                 </button>
