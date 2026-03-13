@@ -1,10 +1,11 @@
-<!DOCTYPE html>
+<!-- <!-- <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RAG Chat — LLaMA 3.1</title>
+    <title>AI Interviewer — LLaMA 3.1</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="icon" href="data:,"> 
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -20,9 +21,9 @@
 
         .chat-container {
             width: 100%;
-            max-width: 640px;
+            max-width: 700px;
             height: 90vh;
-            max-height: 820px;
+            max-height: 850px;
             display: flex;
             flex-direction: column;
             background: rgba(255, 255, 255, 0.05);
@@ -34,36 +35,52 @@
             box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5);
         }
 
-        /* ── Header ── */
+        /* ── Header & Setup ── */
         .header {
             padding: 22px 24px;
             background: rgba(255, 255, 255, 0.04);
             border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-            text-align: center;
         }
         .header h1 {
             font-size: 20px;
             font-weight: 700;
             color: #e2e8f0;
-            letter-spacing: -0.3px;
+            text-align: center;
+            margin-bottom: 15px;
         }
-        .header p {
-            font-size: 13px;
-            color: rgba(255, 255, 255, 0.4);
-            margin-top: 4px;
+        
+        .setup-panel {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
         }
-        .header .status-dot {
-            display: inline-block;
-            width: 8px; height: 8px;
-            border-radius: 50%;
+        
+        .setup-panel select {
+            padding: 8px 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            color: #fff;
+            font-size: 14px;
+            outline: none;
+            cursor: pointer;
+        }
+        
+        .setup-panel select option { background: #302b63; color: white; }
+        
+        .setup-panel button {
+            padding: 8px 16px;
             background: #34d399;
-            margin-right: 6px;
-            animation: pulse 2s infinite;
+            color: #064e3b;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
         }
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.4; }
-        }
+        .setup-panel button:hover { opacity: 0.9; }
+        .setup-panel button:disabled { opacity: 0.5; cursor: not-allowed; }
 
         /* ── Messages ── */
         .messages {
@@ -171,6 +188,7 @@
             border-color: rgba(139, 92, 246, 0.5);
             box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
         }
+        .input-area input:disabled { opacity: 0.5; cursor: not-allowed; }
         .input-area button {
             padding: 12px 22px;
             background: linear-gradient(135deg, #6366f1, #8b5cf6);
@@ -179,88 +197,148 @@
             border-radius: 14px;
             font-size: 14px;
             font-weight: 600;
-            font-family: inherit;
             cursor: pointer;
             transition: transform 0.15s, opacity 0.2s;
         }
-        .input-area button:hover { transform: scale(1.03); }
-        .input-area button:active { transform: scale(0.97); }
-        .input-area button:disabled {
-            opacity: 0.4;
-            cursor: not-allowed;
-            transform: none;
-        }
+        .input-area button:hover:not(:disabled) { transform: scale(1.03); }
+        .input-area button:active:not(:disabled) { transform: scale(0.97); }
+        .input-area button:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
     </style>
 </head>
 <body>
 <div class="chat-container">
     <div class="header">
-        <h1>Local RAG with LLaMA 3.1</h1>
-        <p><span class="status-dot"></span>Ask anything about your documents</p>
+        <h1>Adaptive AI Interviewer</h1>
+        <div class="setup-panel" id="setupPanel">
+            <select id="topicSelect">
+                <option value="c">C</option>
+                <option value="cpp">C++</option>
+                <option value="django">Django</option>
+                <option value="docker">Docker</option>
+                <option value="go">Go</option>
+                <option value="java">Java</option>
+                <option value="javascript">JavaScript</option>
+                <option value="kotlin">Kotlin</option>
+                <option value="mongodb">MongoDB</option>
+                <option value="mysql">MySQL</option>
+                <option value="nodejs">NodeJS</option>
+                <option value="postgresql">PostgreSQL</option>
+                <option value="python" selected>Python</option>
+                <option value="react">React</option>
+                <option value="rust">Rust</option>
+                <option value="timepass">Timepass</option>
+                <option value="typescript">TypeScript</option>
+            </select>
+            
+            <select id="levelSelect">
+                <option value="Beginner">Beginner</option>
+                <option value="Intermediate">Intermediate</option>
+                <option value="Advanced">Advanced</option>
+            </select>
+            <button id="startBtn">Start Interview</button>
+        </div>
     </div>
 
     <div class="messages" id="chat">
-        <div class="msg bot">👋 Hey! I'm your local AI assistant powered by your project docs. Ask me anything!</div>
+        <div class="msg bot" id="welcomeMsg">👋 Welcome! Set your topic and level above, then click Start Interview.</div>
     </div>
 
     <div class="input-area">
-        <input type="text" id="queryInput" placeholder="Type your question…"
-               autocomplete="off" autofocus>
-        <button id="sendBtn">Ask</button>
+        <input type="text" id="queryInput" placeholder="Your answer..." autocomplete="off" disabled>
+        <button id="sendBtn" disabled>Reply</button>
     </div>
 </div>
 
 <script>
-    // ── Base URL: auto-detect so it works whether you open via localhost:8000 or file:// ──
-    const API_BASE = window.location.protocol === 'file:'
-        ? 'http://localhost:8000'
-        : '';
+    const API_BASE = window.location.protocol === 'file:' ? 'http://localhost:8000' : '';
 
-    const chat     = document.getElementById('chat');
-    const input    = document.getElementById('queryInput');
-    const sendBtn  = document.getElementById('sendBtn');
-    let   sending  = false;
+    const chat      = document.getElementById('chat');
+    const input     = document.getElementById('queryInput');
+    const sendBtn   = document.getElementById('sendBtn');
+    
+    // Setup elements
+    const topicSelect = document.getElementById('topicSelect');
+    const levelSelect = document.getElementById('levelSelect');
+    const startBtn = document.getElementById('startBtn');
+    const setupPanel = document.getElementById('setupPanel');
+    const welcomeMsg = document.getElementById('welcomeMsg');
 
-    // Send on Enter or click
-    input.addEventListener('keydown', e => { if (e.key === 'Enter' && !sending) send(); });
-    sendBtn.addEventListener('click', () => { if (!sending) send(); });
+    let sending = false;
+    let chatHistory = []; 
 
-    async function send() {
+    // Event Listeners
+    startBtn.addEventListener('click', startInterview);
+    input.addEventListener('keydown', e => { 
+        if (e.key === 'Enter' && !sending) {
+            sendReply(); 
+        }
+    });
+    sendBtn.addEventListener('click', () => { 
+        if (!sending) {
+            sendReply(); 
+        }
+    });
+
+    // Make sure 'async' is correctly applied here
+    async function startInterview() {
+        const topic = topicSelect.options[topicSelect.selectedIndex].text;
+        
+        // Lock setup UI
+        topicSelect.disabled = true;
+        levelSelect.disabled = true;
+        startBtn.disabled = true;
+        welcomeMsg.style.display = 'none';
+        
+        // Enable chat UI
+        input.disabled = false;
+        sendBtn.disabled = false;
+
+        // Kick off the interview with an initial prompt
+        await processTurn(`Hello! I am ready to begin the interview for ${topic}. Please ask your first question.`);
+    }
+
+    // Make sure 'async' is correctly applied here
+    async function sendReply() {
         const q = input.value.trim();
         if (!q) return;
 
+        addBubble(q, 'user');
+        chatHistory.push({ role: 'user', content: q });
+        input.value = '';
+        
+        await processTurn(q);
+    }
+
+    // Process the turn and communicate with the backend
+    async function processTurn(userMessage) {
         sending = true;
         sendBtn.disabled = true;
-        input.value = '';
+        input.disabled = true;
 
-        // User bubble
-        addBubble(q, 'user');
-
-        // Thinking indicator
-        const thinkEl = addBubble('Thinking', 'thinking');
-
-        // Bot bubble (we'll stream into it)
+        const thinkEl = addBubble('Interviewer is thinking', 'thinking');
         const botEl = addBubble('', 'bot');
-        botEl.style.display = 'none';  // hidden until first token
+        botEl.style.display = 'none';
 
         try {
             const res = await fetch(API_BASE + '/query', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ query: q }),
+                body: JSON.stringify({ 
+                    message: userMessage,
+                    topic: topicSelect.options[topicSelect.selectedIndex].text,
+                    level: levelSelect.value,
+                    history: chatHistory 
+                }),
             });
 
-            if (!res.ok) {
-                throw new Error('Server returned ' + res.status);
-            }
+            if (!res.ok) throw new Error('Server returned ' + res.status);
 
-            // Remove thinking, show bot bubble
             thinkEl.remove();
             botEl.style.display = '';
 
             const reader  = res.body.getReader();
             const decoder = new TextDecoder();
-            let   text    = '';
+            let text = '';
 
             while (true) {
                 const { done, value } = await reader.read();
@@ -271,19 +349,22 @@
             }
 
             if (!text.trim()) {
-                botEl.textContent = '(empty response — is Ollama running with llama3.1 pulled?)';
+                botEl.textContent = '(empty response — check Ollama logs)';
+            } else {
+                // Save AI response to history
+                chatHistory.push({ role: 'assistant', content: text.trim() });
             }
 
         } catch (err) {
             thinkEl.remove();
             botEl.style.display = '';
             botEl.className = 'msg error';
-            botEl.textContent = '⚠ ' + err.message
-                + '\n\nMake sure:\n1. Open this page via http://localhost:8000\n2. Ollama is running (ollama serve)\n3. llama3.1 is pulled (ollama pull llama3.1)';
+            botEl.textContent = '⚠ ' + err.message;
         }
 
         sending = false;
         sendBtn.disabled = false;
+        input.disabled = false;
         input.focus();
     }
 
@@ -296,21 +377,498 @@
         return div;
     }
 
-    // Minimal markdown → HTML
     function renderMd(raw) {
         let s = raw;
-        // fenced code blocks
         s = s.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
-        // bold
         s = s.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-        // italic
         s = s.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
-        // inline code
         s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
-        // line breaks
         s = s.replace(/\n/g, '<br>');
         return s;
     }
 </script>
 </body>
+</html> -->
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Interviewer — LLaMA 3.1</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="icon" href="data:,">
+    <style>
+        /* ... Keep all your previous CSS styles exactly the same ... */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .chat-container {
+            width: 100%;
+            max-width: 700px;
+            height: 90vh;
+            max-height: 850px;
+            display: flex;
+            flex-direction: column;
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5);
+        }
+
+        .header {
+            padding: 22px 24px;
+            background: rgba(255, 255, 255, 0.04);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .header h1 {
+            font-size: 20px;
+            font-weight: 700;
+            color: #e2e8f0;
+            text-align: center;
+            margin-bottom: 15px;
+        }
+
+        .setup-panel {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .setup-panel select {
+            padding: 8px 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            color: #fff;
+            font-size: 14px;
+            outline: none;
+            cursor: pointer;
+        }
+
+        .setup-panel select option {
+            background: #302b63;
+            color: white;
+        }
+
+        .setup-panel button {
+            padding: 8px 16px;
+            background: #34d399;
+            color: #064e3b;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        .setup-panel button:hover {
+            opacity: 0.9;
+        }
+
+        .setup-panel button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            scroll-behavior: smooth;
+        }
+
+        .messages::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .messages::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+        }
+
+        .msg {
+            max-width: 82%;
+            padding: 12px 16px;
+            border-radius: 16px;
+            font-size: 14px;
+            line-height: 1.6;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+            animation: fadeIn 0.25s ease;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(6px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .msg.user {
+            align-self: flex-end;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            color: #fff;
+            border-bottom-right-radius: 4px;
+        }
+
+        .msg.bot {
+            align-self: flex-start;
+            background: rgba(255, 255, 255, 0.07);
+            color: #cbd5e1;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-bottom-left-radius: 4px;
+        }
+
+        .msg.bot code {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 1px 5px;
+            border-radius: 4px;
+            font-family: 'Fira Code', monospace;
+            font-size: 13px;
+        }
+
+        .msg.bot pre {
+            background: rgba(0, 0, 0, 0.35);
+            padding: 10px 12px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 6px 0;
+            font-size: 13px;
+        }
+
+        .msg.thinking {
+            align-self: flex-start;
+            color: rgba(255, 255, 255, 0.35);
+            font-style: italic;
+            background: none;
+            border: none;
+            padding: 8px 0;
+        }
+
+        .msg.thinking::after {
+            content: '';
+            animation: dots 1.5s steps(3, end) infinite;
+        }
+
+        @keyframes dots {
+            0% {
+                content: '';
+            }
+
+            33% {
+                content: '.';
+            }
+
+            66% {
+                content: '..';
+            }
+
+            100% {
+                content: '...';
+            }
+        }
+
+        .msg.error {
+            align-self: flex-start;
+            color: #f87171;
+            background: rgba(248, 113, 113, 0.08);
+            border: 1px solid rgba(248, 113, 113, 0.15);
+            border-bottom-left-radius: 4px;
+        }
+
+        .input-area {
+            padding: 16px 20px;
+            background: rgba(255, 255, 255, 0.03);
+            border-top: 1px solid rgba(255, 255, 255, 0.06);
+            display: flex;
+            gap: 10px;
+        }
+
+        .input-area input {
+            flex: 1;
+            padding: 12px 18px;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 14px;
+            color: #e2e8f0;
+            font-size: 14px;
+            font-family: inherit;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .input-area input::placeholder {
+            color: rgba(255, 255, 255, 0.25);
+        }
+
+        .input-area input:focus {
+            border-color: rgba(139, 92, 246, 0.5);
+            box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
+        }
+
+        .input-area input:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .input-area button {
+            padding: 12px 22px;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            color: #fff;
+            border: none;
+            border-radius: 14px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.15s, opacity 0.2s;
+        }
+
+        .input-area button:hover:not(:disabled) {
+            transform: scale(1.03);
+        }
+
+        .input-area button:active:not(:disabled) {
+            transform: scale(0.97);
+        }
+
+        .input-area button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* New Style for System notifications */
+        .msg.system {
+            align-self: center;
+            background: rgba(52, 211, 153, 0.15);
+            color: #34d399;
+            font-weight: 600;
+            border: 1px solid rgba(52, 211, 153, 0.3);
+            text-align: center;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="chat-container">
+        <div class="header">
+            <h1>Adaptive AI Interviewer</h1>
+            <div class="setup-panel" id="setupPanel">
+                <select id="topicSelect">
+                    <option value="c">C</option>
+                    <option value="cpp">C++</option>
+                    <option value="django">Django</option>
+                    <option value="docker">Docker</option>
+                    <option value="go">Go</option>
+                    <option value="java">Java</option>
+                    <option value="javascript">JavaScript</option>
+                    <option value="kotlin">Kotlin</option>
+                    <option value="mongodb">MongoDB</option>
+                    <option value="mysql">MySQL</option>
+                    <option value="nodejs">NodeJS</option>
+                    <option value="postgresql">PostgreSQL</option>
+                    <option value="python" selected>Python</option>
+                    <option value="react">React</option>
+                    <option value="rust">Rust</option>
+                    <option value="typescript">TypeScript</option>
+                </select>
+                <select id="levelSelect">
+                    <option value="Beginner">Beginner</option>
+                    <option value="Intermediate">Intermediate</option>
+                    <option value="Advanced">Advanced</option>
+                </select>
+                <button id="startBtn">Start Interview</button>
+            </div>
+        </div>
+
+        <div class="messages" id="chat">
+            <div class="msg bot" id="welcomeMsg">👋 Welcome! Set your topic and level above, then click Start Interview.
+                (5 questions per level).</div>
+        </div>
+
+        <div class="input-area">
+            <input type="text" id="queryInput" placeholder="Your answer..." autocomplete="off" disabled>
+            <button id="sendBtn" disabled>Reply</button>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.protocol === 'file:' ? 'http://localhost:8000' : '';
+
+        const chat = document.getElementById('chat');
+        const input = document.getElementById('queryInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const topicSelect = document.getElementById('topicSelect');
+        const levelSelect = document.getElementById('levelSelect');
+        const startBtn = document.getElementById('startBtn');
+        const welcomeMsg = document.getElementById('welcomeMsg');
+
+        let sending = false;
+        let chatHistory = [];
+
+        // State Tracking variables
+        let currentQuestionNumber = 1;
+        const levelsOrder = ["Beginner", "Intermediate", "Advanced"];
+
+        startBtn.addEventListener('click', startInterview);
+        input.addEventListener('keydown', e => { if (e.key === 'Enter' && !sending) sendReply(); });
+        sendBtn.addEventListener('click', () => { if (!sending) sendReply(); });
+
+        async function startInterview() {
+            topicSelect.disabled = true;
+            levelSelect.disabled = true;
+            startBtn.disabled = true;
+            welcomeMsg.style.display = 'none';
+            input.disabled = false;
+            sendBtn.disabled = false;
+
+            currentQuestionNumber = 1;
+            chatHistory = [];
+
+            await processTurn(`[SYSTEM: Start the interview. Introduce yourself and ask question 1 for ${levelSelect.value}.]`);
+        }
+
+        async function sendReply() {
+            const q = input.value.trim();
+            if (!q) return;
+
+            addBubble(q, 'user');
+            chatHistory.push({ role: 'user', content: q });
+            input.value = '';
+
+            currentQuestionNumber++;
+            await processTurn(q);
+        }
+
+        async function processTurn(userMessage) {
+            sending = true;
+            sendBtn.disabled = true;
+            input.disabled = true;
+
+            const thinkEl = addBubble(`Evaluating (Q${Math.min(currentQuestionNumber, 5)}/5)`, 'thinking');
+            const botEl = addBubble('', 'bot');
+            botEl.style.display = 'none';
+
+            try {
+                const res = await fetch(API_BASE + '/query', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        message: userMessage,
+                        topic: topicSelect.options[topicSelect.selectedIndex].text,
+                        level: levelSelect.value,
+                        history: chatHistory,
+                        question_number: currentQuestionNumber
+                    }),
+                });
+
+                if (!res.ok) throw new Error('Server returned ' + res.status);
+
+                thinkEl.remove();
+                botEl.style.display = '';
+
+                const reader = res.body.getReader();
+                const decoder = new TextDecoder();
+                let text = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    text += decoder.decode(value, { stream: true });
+
+                    // Clean tags from UI view, but keep them in 'text' logic
+                    let displayHTML = renderMd(text.replace(/\[LEVEL_UP\]|\[END_INTERVIEW\]/g, ''));
+                    botEl.innerHTML = displayHTML;
+                    chat.scrollTop = chat.scrollHeight;
+                }
+
+                chatHistory.push({ role: 'assistant', content: text.trim() });
+
+                // ── EVALUATE INTERVIEW STATE ──
+                if (text.includes('[LEVEL_UP]')) {
+                    let currentLevelIdx = levelsOrder.indexOf(levelSelect.value);
+                    if (currentLevelIdx < levelsOrder.length - 1) {
+                        // Level up logic
+                        levelSelect.value = levelsOrder[currentLevelIdx + 1];
+                        addBubble(`🎉 Passed! Moving up to ${levelSelect.value} level.`, 'system');
+
+                        // Reset for next level
+                        currentQuestionNumber = 1;
+                        chatHistory = []; // Reset history so AI isn't bogged down
+                        await processTurn(`[SYSTEM: The candidate leveled up. Ask Question 1 for the ${levelSelect.value} level.]`);
+                        return; // exit early so inputs stay disabled until new Q arrives
+                    } else {
+                        addBubble('🏆 Congratulations! You have successfully passed all levels of the interview!', 'system');
+                        input.disabled = true; sendBtn.disabled = true;
+                        return;
+                    }
+                } else if (text.includes('[END_INTERVIEW]')) {
+                    addBubble('🛑 The interview has been concluded. Thank you for your time.', 'error');
+                    input.disabled = true; sendBtn.disabled = true;
+                    return;
+                }
+
+            } catch (err) {
+                thinkEl.remove();
+                botEl.style.display = '';
+                botEl.className = 'msg error';
+                botEl.textContent = '⚠ ' + err.message;
+            }
+
+            sending = false;
+            sendBtn.disabled = false;
+            input.disabled = false;
+            input.focus();
+        }
+
+        function addBubble(text, cls) {
+            const div = document.createElement('div');
+            div.className = 'msg ' + cls;
+            div.innerHTML = cls === 'system' || cls === 'thinking' ? text : renderMd(text);
+            chat.appendChild(div);
+            chat.scrollTop = chat.scrollHeight;
+            return div;
+        }
+
+        function renderMd(raw) {
+            let s = raw;
+            s = s.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
+            s = s.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            s = s.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
+            s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+            s = s.replace(/\n/g, '<br>');
+            return s;
+        }
+    </script>
+</body>
+
 </html>
