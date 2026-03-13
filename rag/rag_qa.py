@@ -47,42 +47,53 @@ def stream_llama(prompt: str):
         yield f"\n[Error contacting Ollama: {e}]"
 
 def build_interviewer_prompt(context: str, topics: List[str], level: str, history: List[Message], latest_msg: str, q_num: int, repo_names: List[str]) -> str:
-    # Build conversation history
     history_text = ""
     for msg in history:
         role_name = "Interviewer" if msg.role == "assistant" else "Candidate"
         history_text += f"{role_name}: {msg.content}\n"
 
     topics_str = ", ".join(topics)
-    repos_str = ", ".join(repo_names) if repo_names else "None"
 
-    # Context directive
-    repo_directive = f"Use their GitHub repos ({repos_str}) as context. Ask WHY they implemented things a certain way or HOW it scales. Do not just ask for syntax." if repo_names else f"Focus on deep conceptual questions for {topics_str}."
-
-    # Strict State Machine for the LLM
-    if q_num == 1:
-        action = f"Introduce yourself briefly and ask your very first question. {repo_directive}"
-    elif q_num <= 7:
-        action = f"""1. Evaluate the Candidate's Latest Message.
-- IF the message is gibberish (e.g., "xfgsdxgsdg"), keyboard mashing, "I don't know", or fundamentally wrong: Output EXACTLY '[END_INTERVIEW]' and nothing else. Stop immediately.
-- IF the message is acceptable: Provide a maximum 1-sentence evaluation. Then, ask your next technical question. {repo_directive}"""
+    # 1. Define the Phase of the Interview
+    if q_num in [1, 2]:
+        phase_instruction = f"Ask a general conceptual question about {topics_str} to establish baseline knowledge. Do NOT ask about their repo yet."
+    elif q_num in [3, 4, 5]:
+        if repo_names:
+            phase_instruction = "Transition to the candidate's repository. Using the Reference Material, ask a 'why' or 'how' architectural question about their code. Do not just ask for syntax."
+        else:
+            phase_instruction = f"Ask an intermediate scenario-based question regarding {topics_str}."
     else:
-        action = """1. Evaluate the Candidate's Latest Message in exactly 1 sentence.
-2. Output EXACTLY '[LEVEL_UP]' if they demonstrated strong knowledge overall. Output EXACTLY '[END_INTERVIEW]' if their overall performance was weak.
+        phase_instruction = "Ask a more advanced question or an edge-case troubleshooting scenario."
+
+    # 2. Define the State and Evaluation Logic (The "Slope")
+    if q_num == 1:
+        state = f"Briefly introduce yourself and ask your first question. {phase_instruction}"
+    elif q_num <= 7:
+        state = f"""EVALUATION & ADAPTATION RULES:
+1. If the answer is mostly correct: Give 1 brief sentence of positive feedback, slightly increase the difficulty, and ask the next question.
+2. If the answer is partially wrong: Give 1 brief sentence correcting them, maintain or lower the difficulty, and ask the next question.
+3. If the answer is completely wrong: DO NOT end the interview. Give a brief correction, drop the difficulty to a fundamental, basic concept, and ask the next question to give them a chance to recover.
+4. TERMINATION RULE: ONLY output EXACTLY '[END_INTERVIEW]' if the input is literal gibberish/keyboard mashing, or if they have completely failed the easiest, most basic fallback questions.
+
+NEXT ACTION: Provide your 1-sentence evaluation, then execute this phase: {phase_instruction}"""
+    else:
+        state = """Evaluate their final answer in 1 sentence.
+If the candidate demonstrated acceptable knowledge overall (even if they missed some hard questions but got basics right), output EXACTLY '[LEVEL_UP]'.
+If they repeatedly failed basic fundamental questions, output EXACTLY '[END_INTERVIEW]'.
 DO NOT ASK ANY MORE QUESTIONS."""
 
-    # Final Prompt Assembly
-    return f"""You are a strict, senior technical interviewer evaluating a candidate for a {level} role in {topics_str}.
+    # 3. Final Prompt Assembly
+    return f"""You are a strict but fair senior technical interviewer evaluating a candidate on {topics_str} ({level} level).
 
 CRITICAL RULES:
 1. NEVER simulate the candidate's response. Wait for the user.
-2. NEVER prefix your questions with "Question 2 of 7:" or similar numbering. Just ask the question directly.
-3. Keep feedback extremely brief (1 sentence maximum).
+2. NEVER prefix your questions with "Question X of Y:". Just ask the question directly.
+3. Keep feedback extremely brief (1 sentence maximum). Do not lecture.
 
 CURRENT INSTRUCTION:
-{action}
+{state}
 
-Reference Material:
+Reference Material (Code / Docs retrieved from their repo or subject files):
 {context if context else 'No specific reference material found.'}
 
 Conversation History:

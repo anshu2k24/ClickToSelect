@@ -8,338 +8,53 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="icon" href="data:,">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', sans-serif; background: linear-gradient(135deg, #0f0c29, #302b63, #24243e); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .chat-container { width: 100%; max-width: 850px; height: 90vh; max-height: 850px; display: flex; flex-direction: column; background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 20px; overflow: hidden; box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5); }
+        .header { padding: 22px 24px; background: rgba(255, 255, 255, 0.04); border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
+        .header h1 { font-size: 20px; font-weight: 700; color: #e2e8f0; text-align: center; margin-bottom: 15px; }
+        
+        .setup-panel { display: flex; gap: 15px; justify-content: center; align-items: stretch; flex-wrap: wrap;}
+        .setup-col { display: flex; flex-direction: column; gap: 8px; }
+        
+        .repo-inputs { display: flex; flex-direction: column; gap: 5px; }
+        .repo-row { display: flex; gap: 5px; }
+        .repo-row input { width: 220px; }
+        .add-repo-btn { padding: 0 10px; background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 8px; color: #fff; cursor: pointer; transition: 0.2s; font-weight: bold;}
+        .add-repo-btn:hover { background: rgba(255, 255, 255, 0.2); }
 
-        body {
-            font-family: 'Inter', sans-serif;
-            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-        }
+        .setup-panel input, .setup-panel select { padding: 8px 12px; background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 8px; color: #fff; font-size: 13px; outline: none; }
+        .setup-panel input::placeholder { color: rgba(255, 255, 255, 0.5); }
+        .setup-panel select[multiple] { height: 95px; }
+        .setup-panel select option { background: #302b63; color: white; padding: 4px; }
+        .setup-panel button.primary-btn { padding: 8px 16px; background: #34d399; color: #064e3b; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; transition: opacity 0.2s; height: 38px; align-self: flex-end;}
+        .setup-panel button.primary-btn:hover { opacity: 0.9; }
+        .setup-panel button:disabled { opacity: 0.5; cursor: not-allowed; }
 
-        .chat-container {
-            width: 100%;
-            max-width: 850px;
-            height: 90vh;
-            max-height: 850px;
-            display: flex;
-            flex-direction: column;
-            background: rgba(255, 255, 255, 0.05);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 20px;
-            overflow: hidden;
-            box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5);
-        }
-
-        .header {
-            padding: 22px 24px;
-            background: rgba(255, 255, 255, 0.04);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-        }
-
-        .header h1 {
-            font-size: 20px;
-            font-weight: 700;
-            color: #e2e8f0;
-            text-align: center;
-            margin-bottom: 15px;
-        }
-
-        .setup-panel {
-            display: flex;
-            gap: 15px;
-            justify-content: center;
-            align-items: stretch;
-            flex-wrap: wrap;
-        }
-
-        .setup-col {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        /* Dynamic Repo Inputs */
-        .repo-inputs {
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-        }
-
-        .repo-row {
-            display: flex;
-            gap: 5px;
-        }
-
-        .repo-row input {
-            width: 220px;
-        }
-
-        .add-repo-btn {
-            padding: 0 10px;
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 8px;
-            color: #fff;
-            cursor: pointer;
-            transition: 0.2s;
-            font-weight: bold;
-        }
-
-        .add-repo-btn:hover {
-            background: rgba(255, 255, 255, 0.2);
-        }
-
-        .setup-panel input,
-        .setup-panel select {
-            padding: 8px 12px;
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 8px;
-            color: #fff;
-            font-size: 13px;
-            outline: none;
-        }
-
-        .setup-panel input::placeholder {
-            color: rgba(255, 255, 255, 0.5);
-        }
-
-        .setup-panel select[multiple] {
-            height: 95px;
-        }
-
-        .setup-panel select option {
-            background: #302b63;
-            color: white;
-            padding: 4px;
-        }
-
-        .setup-panel button.primary-btn {
-            padding: 8px 16px;
-            background: #34d399;
-            color: #064e3b;
-            border: none;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: opacity 0.2s;
-            height: 38px;
-            align-self: flex-end;
-        }
-
-        .setup-panel button.primary-btn:hover {
-            opacity: 0.9;
-        }
-
-        .setup-panel button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .messages {
-            flex: 1;
-            overflow-y: auto;
-            padding: 24px 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 14px;
-            scroll-behavior: smooth;
-        }
-
-        .messages::-webkit-scrollbar {
-            width: 4px;
-        }
-
-        .messages::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 4px;
-        }
-
-        .msg {
-            max-width: 82%;
-            padding: 12px 16px;
-            border-radius: 16px;
-            font-size: 14px;
-            line-height: 1.6;
-            word-wrap: break-word;
-            white-space: pre-wrap;
-            animation: fadeIn 0.25s ease;
-        }
-
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(6px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .msg.user {
-            align-self: flex-end;
-            background: linear-gradient(135deg, #6366f1, #8b5cf6);
-            color: #fff;
-            border-bottom-right-radius: 4px;
-        }
-
-        .msg.bot {
-            align-self: flex-start;
-            background: rgba(255, 255, 255, 0.07);
-            color: #cbd5e1;
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            border-bottom-left-radius: 4px;
-        }
-
-        .msg.bot code {
-            background: rgba(0, 0, 0, 0.3);
-            padding: 1px 5px;
-            border-radius: 4px;
-            font-family: 'Fira Code', monospace;
-            font-size: 13px;
-        }
-
-        .msg.bot pre {
-            background: rgba(0, 0, 0, 0.35);
-            padding: 10px 12px;
-            border-radius: 8px;
-            overflow-x: auto;
-            margin: 6px 0;
-            font-size: 13px;
-        }
-
-        .msg.thinking {
-            align-self: flex-start;
-            color: rgba(255, 255, 255, 0.35);
-            font-style: italic;
-            background: none;
-            border: none;
-            padding: 8px 0;
-        }
-
-        .msg.thinking::after {
-            content: '';
-            animation: dots 1.5s steps(3, end) infinite;
-        }
-
-        @keyframes dots {
-            0% {
-                content: '';
-            }
-
-            33% {
-                content: '.';
-            }
-
-            66% {
-                content: '..';
-            }
-
-            100% {
-                content: '...';
-            }
-        }
-
-        .msg.error {
-            align-self: flex-start;
-            color: #f87171;
-            background: rgba(248, 113, 113, 0.08);
-            border: 1px solid rgba(248, 113, 113, 0.15);
-            border-bottom-left-radius: 4px;
-        }
-
-        .input-area {
-            padding: 16px 20px;
-            background: rgba(255, 255, 255, 0.03);
-            border-top: 1px solid rgba(255, 255, 255, 0.06);
-            display: flex;
-            gap: 10px;
-        }
-
-        .input-area input {
-            flex: 1;
-            padding: 12px 18px;
-            background: rgba(255, 255, 255, 0.06);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 14px;
-            color: #e2e8f0;
-            font-size: 14px;
-            font-family: inherit;
-            outline: none;
-            transition: border-color 0.2s, box-shadow 0.2s;
-        }
-
-        .input-area input::placeholder {
-            color: rgba(255, 255, 255, 0.25);
-        }
-
-        .input-area input:focus {
-            border-color: rgba(139, 92, 246, 0.5);
-            box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
-        }
-
-        .input-area input:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .input-area button {
-            padding: 12px 22px;
-            background: linear-gradient(135deg, #6366f1, #8b5cf6);
-            color: #fff;
-            border: none;
-            border-radius: 14px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: transform 0.15s, opacity 0.2s;
-        }
-
-        .input-area button:hover:not(:disabled) {
-            transform: scale(1.03);
-        }
-
-        .input-area button:active:not(:disabled) {
-            transform: scale(0.97);
-        }
-
-        .input-area button:disabled {
-            opacity: 0.4;
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        .msg.system {
-            align-self: center;
-            background: rgba(52, 211, 153, 0.15);
-            color: #34d399;
-            font-weight: 600;
-            border: 1px solid rgba(52, 211, 153, 0.3);
-            text-align: center;
-            margin: 10px 0;
-            border-radius: 16px;
-            padding: 8px 16px;
-            font-size: 13px;
-        }
-
-        .help-text {
-            font-size: 11px;
-            color: rgba(255, 255, 255, 0.4);
-            margin-top: 4px;
-            text-align: center;
-        }
+        .messages { flex: 1; overflow-y: auto; padding: 24px 20px; display: flex; flex-direction: column; gap: 14px; scroll-behavior: smooth; }
+        .messages::-webkit-scrollbar { width: 4px; }
+        .messages::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 4px; }
+        .msg { max-width: 82%; padding: 12px 16px; border-radius: 16px; font-size: 14px; line-height: 1.6; word-wrap: break-word; white-space: pre-wrap; animation: fadeIn 0.25s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+        .msg.user { align-self: flex-end; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: #fff; border-bottom-right-radius: 4px; }
+        .msg.bot { align-self: flex-start; background: rgba(255, 255, 255, 0.07); color: #cbd5e1; border: 1px solid rgba(255, 255, 255, 0.06); border-bottom-left-radius: 4px; }
+        .msg.bot code { background: rgba(0, 0, 0, 0.3); padding: 1px 5px; border-radius: 4px; font-family: 'Fira Code', monospace; font-size: 13px; }
+        .msg.bot pre { background: rgba(0, 0, 0, 0.35); padding: 10px 12px; border-radius: 8px; overflow-x: auto; margin: 6px 0; font-size: 13px; }
+        .msg.thinking { align-self: flex-start; color: rgba(255, 255, 255, 0.35); font-style: italic; background: none; border: none; padding: 8px 0; }
+        .msg.thinking::after { content: ''; animation: dots 1.5s steps(3, end) infinite; }
+        @keyframes dots { 0% { content: ''; } 33% { content: '.'; } 66% { content: '..'; } 100% { content: '...'; } }
+        .msg.error { align-self: flex-start; color: #f87171; background: rgba(248, 113, 113, 0.08); border: 1px solid rgba(248, 113, 113, 0.15); border-bottom-left-radius: 4px; }
+        .input-area { padding: 16px 20px; background: rgba(255, 255, 255, 0.03); border-top: 1px solid rgba(255, 255, 255, 0.06); display: flex; gap: 10px; }
+        .input-area input { flex: 1; padding: 12px 18px; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 14px; color: #e2e8f0; font-size: 14px; font-family: inherit; outline: none; transition: border-color 0.2s, box-shadow 0.2s; }
+        .input-area input::placeholder { color: rgba(255, 255, 255, 0.25); }
+        .input-area input:focus { border-color: rgba(139, 92, 246, 0.5); box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15); }
+        .input-area input:disabled { opacity: 0.5; cursor: not-allowed; }
+        .input-area button { padding: 12px 22px; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: #fff; border: none; border-radius: 14px; font-size: 14px; font-weight: 600; cursor: pointer; transition: transform 0.15s, opacity 0.2s; }
+        .input-area button:hover:not(:disabled) { transform: scale(1.03); }
+        .input-area button:active:not(:disabled) { transform: scale(0.97); }
+        .input-area button:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+        .msg.system { align-self: center; background: rgba(52, 211, 153, 0.15); color: #34d399; font-weight: 600; border: 1px solid rgba(52, 211, 153, 0.3); text-align: center; margin: 10px 0; border-radius: 16px; padding: 8px 16px; font-size: 13px;}
+        .help-text { font-size: 11px; color: rgba(255,255,255,0.4); margin-top: 4px; text-align: center; }
     </style>
 </head>
 
@@ -348,7 +63,7 @@
         <div class="header">
             <h1>Adaptive AI Interviewer</h1>
             <div class="setup-panel" id="setupPanel">
-
+                
                 <div class="setup-col">
                     <div class="repo-inputs" id="repoInputsContainer">
                         <div class="repo-row">
@@ -357,7 +72,7 @@
                         </div>
                     </div>
                 </div>
-
+                
                 <div class="setup-col">
                     <select id="topicSelect" multiple title="Hold Ctrl/Cmd to select multiple">
                         <option value="c">C</option>
@@ -379,7 +94,7 @@
                     </select>
                     <div class="help-text">Hold Ctrl/Cmd to select multiple.</div>
                 </div>
-
+                
                 <div class="setup-col">
                     <select id="levelSelect">
                         <option value="Beginner">Beginner</option>
@@ -393,8 +108,7 @@
         </div>
 
         <div class="messages" id="chat">
-            <div class="msg bot" id="welcomeMsg">👋 Welcome! Provide repos, select languages, and click Start. (7
-                questions per level).</div>
+            <div class="msg bot" id="welcomeMsg">👋 Welcome! Provide repos, select languages, and click Start. (7 questions per level).</div>
         </div>
 
         <div class="input-area">
@@ -413,8 +127,7 @@
         const levelSelect = document.getElementById('levelSelect');
         const startBtn = document.getElementById('startBtn');
         const welcomeMsg = document.getElementById('welcomeMsg');
-
-        // Repo dynamic inputs
+        
         const repoContainer = document.getElementById('repoInputsContainer');
         const addRepoBtn = document.getElementById('addRepoBtn');
 
@@ -425,17 +138,16 @@
         let currentTopics = [];
         const levelsOrder = ["Beginner", "Intermediate", "Advanced"];
 
-        // Handle adding more repo input fields (Max 5)
         let repoCount = 1;
         addRepoBtn.addEventListener('click', () => {
             if (repoCount >= 5) return alert("Maximum 5 repositories allowed.");
-
+            
             const newRow = document.createElement('div');
             newRow.className = 'repo-row';
             newRow.innerHTML = `<input type="text" class="repo-url-input" placeholder="GitHub Repo URL ${repoCount + 1}">`;
             repoContainer.appendChild(newRow);
             repoCount++;
-
+            
             if (repoCount === 5) addRepoBtn.style.display = 'none';
         });
 
@@ -444,14 +156,12 @@
         sendBtn.addEventListener('click', () => { if (!sending) sendReply(); });
 
         async function startInterview() {
-            // Collect all non-empty repo URLs
             const repoInputs = document.querySelectorAll('.repo-url-input');
             const repoUrls = Array.from(repoInputs).map(inp => inp.value.trim()).filter(url => url);
-
+            
             currentTopics = Array.from(topicSelect.selectedOptions).map(opt => opt.value);
             if (currentTopics.length === 0) return alert("Please select at least one topic.");
 
-            // Lock UI
             repoInputs.forEach(inp => inp.disabled = true);
             addRepoBtn.disabled = true;
             topicSelect.disabled = true;
@@ -469,7 +179,7 @@
                     });
                     if (!res.ok) throw new Error('Failed to ingest repositories.');
                     const data = await res.json();
-
+                    
                     currentRepoNames = data.repo_names;
                     loadingIngest.remove();
                     addBubble(`✅ Successfully ingested: <b>${currentRepoNames.join(', ')}</b>!`, 'system');
@@ -525,7 +235,7 @@
                 if (!res.ok) throw new Error('Server returned ' + res.status);
 
                 thinkEl.remove();
-
+                
                 const reader = res.body.getReader();
                 const decoder = new TextDecoder();
                 let text = '';
@@ -536,15 +246,15 @@
                     text += decoder.decode(value, { stream: true });
 
                     let displayHTML = renderMd(text.replace(/\[LEVEL_UP\]|\[END_INTERVIEW\]/g, ''));
-
-                    // Prevent showing an empty bubble if the LLM immediately terminated with no text
-                    if (displayHTML.trim() === "") {
+                    
+                    // Prevent empty bubbles if LLM terminated immediately
+                    if(displayHTML.trim() === "") {
                         botEl.style.display = 'none';
                     } else {
                         botEl.style.display = '';
                         botEl.innerHTML = displayHTML;
                     }
-
+                    
                     chat.scrollTop = chat.scrollHeight;
                 }
 
@@ -558,9 +268,9 @@
                         addBubble(`🎉 Passed! Moving up to ${levelSelect.value} level.`, 'system');
 
                         currentQuestionNumber = 1;
-                        chatHistory = [];
+                        chatHistory = []; 
                         await processTurn(`[SYSTEM: The candidate leveled up. Ask Question 1 for the ${levelSelect.value} level.]`);
-                        return;
+                        return; 
                     } else {
                         addBubble('🏆 Congratulations! You have successfully passed all levels of the interview!', 'system');
                         input.disabled = true; sendBtn.disabled = true;
@@ -605,5 +315,4 @@
         }
     </script>
 </body>
-
 </html>
