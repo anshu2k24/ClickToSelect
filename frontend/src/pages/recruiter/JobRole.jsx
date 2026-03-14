@@ -68,7 +68,7 @@ function CandidateCard({candidate,onStartInterview}){
       </div>
       {cheatCount > 0 && lastCheatEvent && <div style={{marginBottom:"10px",fontFamily:"'Sora',sans-serif",fontSize:"11px",color:"#fca5a5",fontWeight:"600"}}>Latest alert: {String(lastCheatEvent).replaceAll("_", " ")}</div>}
       <div style={{display:"flex",alignItems:"center",gap:"8px",flexWrap:"wrap"}}>
-        <button className="start-int-btn" onClick={()=>onStartInterview(candidate)}><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><polygon points="3,1 11,6 3,11" fill="currentColor"/></svg>{interviewId ? "Restart Interview" : "Start Interview"}</button>
+        <button className="start-int-btn" onClick={()=>onStartInterview(candidate)}><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><polygon points="3,1 11,6 3,11" fill="currentColor"/></svg>{interviewId ? "Open Interview" : "Start Interview"}</button>
         {interviewId && <div style={{display:"inline-flex",alignItems:"center",gap:"5px",padding:"5px 10px",borderRadius:"6px",background:"rgba(22,163,74,0.12)",border:"1px solid rgba(22,163,74,0.30)",fontFamily:"'Space Mono',monospace",fontSize:"9px",color:"#4ade80",letterSpacing:"0.08em",fontWeight:"700"}}>✓ LINKED</div>}
       </div>
     </div>
@@ -211,6 +211,11 @@ export default function JobRole(){
   const handleStartInterview = async (candidate) => {
     setPageError("");
 
+    if (candidate?.interviewId) {
+      navigate(`/recruiter/parallel/${encodeURIComponent(candidate.interviewId)}`);
+      return;
+    }
+
     if (!job?.id || !UUID_RE.test(String(job.id))) {
       setPageError("This job is not backed by a real backend job record yet, so a tracked interview cannot be created.");
       return;
@@ -239,7 +244,7 @@ export default function JobRole(){
         interviewId: createdInterviewId,
       } : row));
 
-      window.open(`/skill-verify?skill=${encodeURIComponent(job.role || job.title || "Interview")}&interviewId=${encodeURIComponent(createdInterviewId)}`, "_blank");
+      navigate(`/recruiter/parallel/${encodeURIComponent(createdInterviewId)}`);
     } catch (error) {
       setPageError(error.message || "Failed to create interview session.");
     }

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, ForeignKey, String, Integer, ARRAY
+from sqlalchemy import Column, ForeignKey, String, Integer, ARRAY, Boolean
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
 
@@ -30,5 +30,13 @@ class InterviewCandidate(Base):
     session_index = Column(Integer)
 
     scores = Column(ARRAY(Integer), default=list)
+
+    active_question = Column(String)
+
+    active_question_source = Column(String)
+
+    pending_answer = Column(String)
+
+    awaiting_manual_score = Column(Boolean, default=False)
 
     status = Column(String, default="pending")

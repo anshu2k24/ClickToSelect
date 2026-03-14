@@ -86,3 +86,19 @@ export function endInterview(interviewId) {
     params: { interview_id: interviewId },
   });
 }
+
+export function getMyInterviewQuestion(interviewId) {
+  return apiRequest("/interview/me/question", {
+    params: { interview_id: interviewId },
+  });
+}
+
+export function submitMyInterviewAnswer({ interviewId, answer }) {
+  return apiRequest("/interview/me/answer", {
+    method: "POST",
+    params: {
+      interview_id: interviewId,
+      answer,
+    },
+  });
+}

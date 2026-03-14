@@ -3,6 +3,7 @@ import AuthRegister      from "./pages/AuthRegister";
 import AuthLogin         from "./pages/AuthLogin";
 import CandidateProfile  from "./pages/candidate/Profile";
 import SkillVerify       from "./pages/candidate/SkillVerify";
+import CandidateInterview from "./pages/candidate/candidate";
 import RecruiterProfile  from "./pages/recruiter/RecruiterProfile";
 import JobRole           from "./pages/recruiter/JobRole";
 import ParallelInterview from "./pages/recruiter/ParallelInterview";
@@ -32,6 +33,7 @@ function App() {
         {/* Candidate protected */}
         <Route path="/profile"             element={<ProtectedRoute role="candidate"><CandidateProfile /></ProtectedRoute>} />
         <Route path="/skill-verify"        element={<ProtectedRoute role="candidate"><SkillVerify /></ProtectedRoute>} />
+        <Route path="/candidate/interview" element={<ProtectedRoute role="candidate"><CandidateInterview /></ProtectedRoute>} />
 
         {/* Recruiter protected */}
         <Route path="/recruiter/profile"   element={<ProtectedRoute role="recruiter"><RecruiterProfile /></ProtectedRoute>} />

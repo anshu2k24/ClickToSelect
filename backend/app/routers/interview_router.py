@@ -37,6 +37,13 @@ def _get_interview_candidate_or_404(db: Session, interview_id: str, candidate_id
     return row
 
 
+def _get_candidate_profile_by_user_or_404(db: Session, user_id: str) -> CandidateProfile:
+    candidate = db.query(CandidateProfile).filter(CandidateProfile.user_id == user_id).first()
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate profile not found")
+    return candidate
+
+
 def _to_int_score(value) -> int:
     try:
         numeric = float(value)
@@ -288,13 +295,19 @@ def ask_question(
     db: Session = Depends(get_db),
     _=Depends(require_roles("recruiter")),
 ):
-    _get_interview_candidate_or_404(db, interview_id, candidate_id)
+    interview_candidate = _get_interview_candidate_or_404(db, interview_id, candidate_id)
 
     normalized = (decision or "").strip().lower()
 
     if normalized in {"accept_followup", "llm"}:
         if not llm_question or not llm_question.strip():
             raise HTTPException(status_code=400, detail="llm_question is required when accepting LLM follow-up")
+
+        interview_candidate.active_question = llm_question.strip()
+        interview_candidate.active_question_source = "llm"
+        interview_candidate.pending_answer = None
+        interview_candidate.awaiting_manual_score = False
+        db.commit()
 
         return {
             "question_source": "llm",
@@ -305,6 +318,12 @@ def ask_question(
     if normalized in {"custom_question", "custom"}:
         if not custom_question or not custom_question.strip():
             raise HTTPException(status_code=400, detail="custom_question is required for custom follow-up")
+
+        interview_candidate.active_question = custom_question.strip()
+        interview_candidate.active_question_source = "custom"
+        interview_candidate.pending_answer = None
+        interview_candidate.awaiting_manual_score = False
+        db.commit()
 
         return {
             "question_source": "recruiter",
@@ -358,6 +377,8 @@ def answer_question(
         except requests.RequestException as exc:
             raise HTTPException(status_code=502, detail=f"LLM scoring failed: {exc}")
 
+        ic.pending_answer = answer.strip()
+        ic.awaiting_manual_score = False
         ic.scores = [*(ic.scores or []), score]
         db.commit()
 
@@ -367,6 +388,10 @@ def answer_question(
         }
 
     if source_normalized in {"custom", "recruiter"}:
+        ic.pending_answer = answer.strip()
+        ic.awaiting_manual_score = True
+        db.commit()
+
         return {
             "candidate_id": candidate_id,
             "answer_for_recruiter_review": answer.strip(),
@@ -391,6 +416,7 @@ def manual_score(
     ic = _get_interview_candidate_or_404(db, interview_id, candidate_id)
 
     ic.scores = [*(ic.scores or []), int(score)]
+    ic.awaiting_manual_score = False
 
     db.commit()
 
@@ -399,6 +425,52 @@ def manual_score(
         "score": int(score),
         "score_source": "recruiter",
     }
+
+
+@router.get("/me/question")
+def get_my_question(
+    interview_id: str,
+    db: Session = Depends(get_db),
+    user=Depends(require_roles("candidate")),
+):
+    candidate = _get_candidate_profile_by_user_or_404(db, user["user_id"])
+    ic = _get_interview_candidate_or_404(db, interview_id, str(candidate.id))
+
+    return {
+        "candidate_id": str(candidate.id),
+        "interview_id": interview_id,
+        "question": ic.active_question,
+        "source": ic.active_question_source,
+        "awaiting_manual_score": bool(ic.awaiting_manual_score),
+        "has_submitted_answer": bool(ic.pending_answer),
+    }
+
+
+@router.post("/me/answer")
+def answer_my_question(
+    interview_id: str,
+    answer: str,
+    db: Session = Depends(get_db),
+    user=Depends(require_roles("candidate")),
+):
+    candidate = _get_candidate_profile_by_user_or_404(db, user["user_id"])
+    ic = _get_interview_candidate_or_404(db, interview_id, str(candidate.id))
+
+    if not ic.active_question:
+        raise HTTPException(status_code=409, detail="No active question has been published for you yet")
+
+    source = (ic.active_question_source or "llm").strip().lower()
+    if source not in {"llm", "custom"}:
+        source = "llm"
+
+    return answer_question(
+        interview_id=interview_id,
+        candidate_id=str(candidate.id),
+        answer=answer,
+        source=source,
+        db=db,
+        _=None,
+    )
 
 
 @router.get("/my")
@@ -443,7 +515,7 @@ def get_my_interviews(
             "interviewer": "AI + Recruiter Panel",
             "ai_level": "Role-based assessment",
             "accepted_at": datetime.utcnow().isoformat(),
-            "join_url": "#" if status == "UPCOMING" else None,
+            "join_url": f"/candidate/interview?interviewId={str(interview.id)}" if status == "UPCOMING" else None,
         })
 
     return payload

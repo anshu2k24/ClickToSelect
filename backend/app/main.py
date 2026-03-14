@@ -60,6 +60,10 @@ def ensure_interview_schema():
         "ALTER TABLE interviews ADD COLUMN IF NOT EXISTS llm_sessions VARCHAR[] DEFAULT ARRAY[]::VARCHAR[]",
         "ALTER TABLE interview_candidates ADD COLUMN IF NOT EXISTS session_index INTEGER",
         "ALTER TABLE interview_candidates ADD COLUMN IF NOT EXISTS scores INTEGER[] DEFAULT ARRAY[]::INTEGER[]",
+        "ALTER TABLE interview_candidates ADD COLUMN IF NOT EXISTS active_question VARCHAR",
+        "ALTER TABLE interview_candidates ADD COLUMN IF NOT EXISTS active_question_source VARCHAR",
+        "ALTER TABLE interview_candidates ADD COLUMN IF NOT EXISTS pending_answer VARCHAR",
+        "ALTER TABLE interview_candidates ADD COLUMN IF NOT EXISTS awaiting_manual_score BOOLEAN DEFAULT FALSE",
     ]
 
     with engine.begin() as connection:

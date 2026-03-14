@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import RecruiterHeader from "../../components/RecruiterHeader";
 import { listCandidates } from "../../api/candidate";
@@ -7,7 +7,6 @@ import {
   endInterview,
   getInterviewQuestion,
   listInterviewCandidates,
-  submitInterviewAnswer,
   submitInterviewManualScore,
 } from "../../api/interview";
 
@@ -80,12 +79,58 @@ export default function ParallelInterview() {
   const [selectedCandidateId, setSelectedCandidateId] = useState("");
 
   const [pendingQuestions, setPendingQuestions] = useState({});
-  const [activeQuestions, setActiveQuestions] = useState({});
   const [customDrafts, setCustomDrafts] = useState({});
-  const [answerDrafts, setAnswerDrafts] = useState({});
-  const [manualReview, setManualReview] = useState({});
   const [manualScores, setManualScores] = useState({});
   const [actionLog, setActionLog] = useState([]);
+
+  const loadCandidates = useCallback(async (showLoader = false) => {
+    if (!interviewId) {
+      return;
+    }
+
+    if (showLoader) {
+      setLoading(true);
+    }
+
+    try {
+      const [linkedRows, allProfiles] = await Promise.all([
+        listInterviewCandidates(interviewId),
+        listCandidates().catch(() => []),
+      ]);
+
+      const profileMap = new Map((Array.isArray(allProfiles) ? allProfiles : []).map((row) => [String(row.id), row]));
+      const normalized = (Array.isArray(linkedRows) ? linkedRows : []).map((row) => {
+        const candidateId = String(row.candidate_id || "");
+        const profile = profileFromMap(candidateId, profileMap);
+        const scores = Array.isArray(row.scores) ? row.scores.map((score) => Number(score || 0)) : [];
+
+        return {
+          id: candidateId,
+          interviewCandidateId: String(row.id || ""),
+          sessionIndex: row.session_index ?? 0,
+          status: row.status || "pending",
+          scores,
+          avgScore: safeAvg(scores),
+          activeQuestion: row.active_question || "",
+          activeQuestionSource: row.active_question_source || "",
+          pendingAnswer: row.pending_answer || "",
+          awaitingManualScore: Boolean(row.awaiting_manual_score),
+          ...profile,
+        };
+      });
+
+      setCandidates(normalized);
+      setSelectedCandidateId((prev) => prev || normalized[0]?.id || "");
+      setError("");
+    } catch (loadError) {
+      setCandidates([]);
+      setError(loadError.message || "Failed to load interview candidates.");
+    } finally {
+      if (showLoader) {
+        setLoading(false);
+      }
+    }
+  }, [interviewId]);
 
   useEffect(() => {
     if (!interviewId) {
@@ -94,59 +139,20 @@ export default function ParallelInterview() {
       return;
     }
 
-    let cancelled = false;
+    loadCandidates(true);
+  }, [interviewId, loadCandidates]);
 
-    const load = async () => {
-      setLoading(true);
-      setError("");
+  useEffect(() => {
+    if (!interviewId) {
+      return undefined;
+    }
 
-      try {
-        const [linkedRows, allProfiles] = await Promise.all([
-          listInterviewCandidates(interviewId),
-          listCandidates().catch(() => []),
-        ]);
+    const intervalId = setInterval(() => {
+      loadCandidates(false);
+    }, 6000);
 
-        if (cancelled) {
-          return;
-        }
-
-        const profileMap = new Map((Array.isArray(allProfiles) ? allProfiles : []).map((row) => [String(row.id), row]));
-        const normalized = (Array.isArray(linkedRows) ? linkedRows : []).map((row) => {
-          const candidateId = String(row.candidate_id || "");
-          const profile = profileFromMap(candidateId, profileMap);
-          const scores = Array.isArray(row.scores) ? row.scores.map((score) => Number(score || 0)) : [];
-
-          return {
-            id: candidateId,
-            interviewCandidateId: String(row.id || ""),
-            sessionIndex: row.session_index ?? 0,
-            status: row.status || "pending",
-            scores,
-            avgScore: safeAvg(scores),
-            ...profile,
-          };
-        });
-
-        setCandidates(normalized);
-        setSelectedCandidateId((prev) => prev || normalized[0]?.id || "");
-      } catch (loadError) {
-        if (!cancelled) {
-          setCandidates([]);
-          setError(loadError.message || "Failed to load interview candidates.");
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    };
-
-    load();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [interviewId]);
+    return () => clearInterval(intervalId);
+  }, [interviewId, loadCandidates]);
 
   const selectedCandidate = useMemo(
     () => candidates.find((candidate) => candidate.id === selectedCandidateId) || null,
@@ -156,20 +162,6 @@ export default function ParallelInterview() {
   const appendLog = (text, type = "system") => {
     const time = new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
     setActionLog((prev) => [{ id: `${Date.now()}-${Math.random()}`, time, text, type }, ...prev].slice(0, 30));
-  };
-
-  const refreshCandidateScore = (candidateId, nextScore) => {
-    setCandidates((prev) => prev.map((candidate) => {
-      if (candidate.id !== candidateId) {
-        return candidate;
-      }
-      const scores = [...(candidate.scores || []), Number(nextScore || 0)];
-      return {
-        ...candidate,
-        scores,
-        avgScore: safeAvg(scores),
-      };
-    }));
   };
 
   const handleGenerateFollowUp = async () => {
@@ -232,13 +224,20 @@ export default function ParallelInterview() {
         throw new Error("Backend did not return the selected question.");
       }
 
-      setActiveQuestions((prev) => ({
-        ...prev,
-        [selectedCandidateId]: {
-          question: questionText,
-          source,
-        },
+      setCandidates((prev) => prev.map((candidate) => {
+        if (candidate.id !== selectedCandidateId) {
+          return candidate;
+        }
+
+        return {
+          ...candidate,
+          activeQuestion: questionText,
+          activeQuestionSource: source,
+          pendingAnswer: "",
+          awaitingManualScore: false,
+        };
       }));
+
       appendLog(
         source === "llm"
           ? `LLM follow-up accepted for ${selectedCandidate?.name || selectedCandidateId}.`
@@ -254,63 +253,13 @@ export default function ParallelInterview() {
     }
   };
 
-  const handleSubmitAnswer = async () => {
-    if (!selectedCandidateId || !interviewId) {
-      return;
-    }
-
-    const active = activeQuestions[selectedCandidateId];
-    if (!active?.question) {
-      setError("Select a follow-up question first.");
-      return;
-    }
-
-    const answer = String(answerDrafts[selectedCandidateId] || "").trim();
-    if (!answer) {
-      setError("Enter candidate response before submitting.");
-      return;
-    }
-
-    setBusy(true);
-    setStatusMessage("");
-    setError("");
-
-    try {
-      const response = await submitInterviewAnswer({
-        interviewId,
-        candidateId: selectedCandidateId,
-        answer,
-        source: active.source === "llm" ? "llm" : "custom",
-      });
-
-      if (typeof response?.score === "number") {
-        refreshCandidateScore(selectedCandidateId, response.score);
-        appendLog(`LLM score ${response.score} recorded for ${selectedCandidate?.name || selectedCandidateId}.`, "system");
-        setStatusMessage("Answer scored by LLM.");
-      } else {
-        setManualReview((prev) => ({
-          ...prev,
-          [selectedCandidateId]: {
-            answer: String(response?.answer_for_recruiter_review || answer),
-          },
-        }));
-        appendLog(`Custom question answer received for ${selectedCandidate?.name || selectedCandidateId}.`, "system");
-        setStatusMessage("Answer received. Provide recruiter score.");
-      }
-
-      setAnswerDrafts((prev) => ({
-        ...prev,
-        [selectedCandidateId]: "",
-      }));
-    } catch (requestError) {
-      setError(requestError.message || "Failed to submit answer.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const handleManualScore = async () => {
     if (!selectedCandidateId || !interviewId) {
+      return;
+    }
+
+    if (!selectedCandidate?.awaitingManualScore) {
+      setError("No candidate answer is awaiting manual score.");
       return;
     }
 
@@ -331,19 +280,13 @@ export default function ParallelInterview() {
         score: Math.round(scoreValue),
       });
 
-      refreshCandidateScore(selectedCandidateId, Math.round(scoreValue));
       appendLog(`Recruiter score ${Math.round(scoreValue)} recorded for ${selectedCandidate?.name || selectedCandidateId}.`, "recruiter");
       setStatusMessage("Manual score submitted.");
-
-      setManualReview((prev) => {
-        const next = { ...prev };
-        delete next[selectedCandidateId];
-        return next;
-      });
       setManualScores((prev) => ({
         ...prev,
         [selectedCandidateId]: "",
       }));
+      await loadCandidates(false);
     } catch (requestError) {
       setError(requestError.message || "Failed to submit manual score.");
     } finally {
@@ -405,6 +348,7 @@ export default function ParallelInterview() {
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontWeight: 700, fontSize: "12px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{candidate.name}</div>
                       <div style={{ fontSize: "10px", color: C.textDim, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{candidate.email}</div>
+                      {candidate.awaitingManualScore && <div style={{ marginTop: "3px", fontSize: "9px", color: "#fbbf24" }}>Awaiting recruiter score</div>}
                     </div>
                     <div style={{
                       minWidth: "42px",
@@ -431,7 +375,10 @@ export default function ParallelInterview() {
                   {selectedCandidate ? `Selected: ${selectedCandidate.name}` : "Select a candidate to begin"}
                 </div>
               </div>
-              <button className="pi-btn" onClick={handleEndInterview} disabled={busy || !interviewId}>End Interview</button>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button className="pi-btn" onClick={() => loadCandidates(false)} disabled={busy || !interviewId}>Refresh</button>
+                <button className="pi-btn" onClick={handleEndInterview} disabled={busy || !interviewId}>End Interview</button>
+              </div>
             </div>
 
             {error && <div style={{ fontSize: "12px", color: "#fda4af", background: "rgba(244,63,94,0.12)", border: "1px solid rgba(244,63,94,0.28)", borderRadius: "8px", padding: "8px 10px" }}>{error}</div>}
@@ -467,36 +414,22 @@ export default function ParallelInterview() {
             </div>
 
             <div style={{ border: "1px solid rgba(168,85,247,0.22)", borderRadius: "12px", padding: "12px", background: "rgba(15,0,32,0.65)" }}>
-              <div style={{ fontFamily: "'Space Mono',monospace", fontSize: "10px", color: "rgba(168,85,247,0.8)", letterSpacing: "0.08em", marginBottom: "8px" }}>ACTIVE QUESTION</div>
+              <div style={{ fontFamily: "'Space Mono',monospace", fontSize: "10px", color: "rgba(168,85,247,0.8)", letterSpacing: "0.08em", marginBottom: "8px" }}>CANDIDATE RESPONSE REVIEW</div>
               <div style={{ fontSize: "12px", color: C.textMid, marginBottom: "8px" }}>
-                {activeQuestions[selectedCandidateId]?.question || "No question has been published yet."}
+                Active Question: {selectedCandidate?.activeQuestion || "No question has been published yet."}
               </div>
               <div style={{ fontSize: "10px", color: C.textDim, marginBottom: "10px" }}>
-                Source: {activeQuestions[selectedCandidateId]?.source === "llm" ? "LLM" : activeQuestions[selectedCandidateId]?.source === "custom" ? "Recruiter" : "N/A"}
+                Source: {selectedCandidate?.activeQuestionSource === "llm" ? "LLM" : selectedCandidate?.activeQuestionSource === "custom" ? "Recruiter" : "N/A"}
               </div>
 
-              <div style={{ marginBottom: "8px", fontSize: "12px", color: C.textDim }}>Candidate Response</div>
-              <textarea
-                className="pi-input"
-                rows={4}
-                placeholder="Paste or type candidate response"
-                value={answerDrafts[selectedCandidateId] || ""}
-                onChange={(event) => setAnswerDrafts((prev) => ({
-                  ...prev,
-                  [selectedCandidateId]: event.target.value,
-                }))}
-                disabled={!selectedCandidateId || busy}
-              />
-              <div style={{ marginTop: "8px" }}>
-                <button className="pi-btn pi-btn-solid" onClick={handleSubmitAnswer} disabled={busy || !selectedCandidateId || !activeQuestions[selectedCandidateId]?.question}>Submit Answer</button>
+              <div style={{ marginBottom: "8px", fontSize: "12px", color: C.textDim }}>Latest Candidate Answer</div>
+              <div style={{ fontSize: "12px", color: C.textMid, background: "rgba(168,85,247,0.08)", border: "1px solid rgba(168,85,247,0.2)", borderRadius: "8px", padding: "8px 10px", minHeight: "52px", marginBottom: "8px" }}>
+                {selectedCandidate?.pendingAnswer || "No answer submitted yet."}
               </div>
 
-              {manualReview[selectedCandidateId] && (
-                <div style={{ marginTop: "12px", borderTop: "1px solid rgba(168,85,247,0.18)", paddingTop: "10px" }}>
-                  <div style={{ fontSize: "12px", color: C.textMid, marginBottom: "6px" }}>Answer for recruiter review:</div>
-                  <div style={{ fontSize: "12px", color: C.textDim, background: "rgba(168,85,247,0.08)", border: "1px solid rgba(168,85,247,0.2)", borderRadius: "8px", padding: "8px 10px", marginBottom: "8px" }}>
-                    {manualReview[selectedCandidateId].answer}
-                  </div>
+              {selectedCandidate?.awaitingManualScore && (
+                <div style={{ marginTop: "10px", borderTop: "1px solid rgba(168,85,247,0.18)", paddingTop: "10px" }}>
+                  <div style={{ fontSize: "11px", color: "#fbbf24", marginBottom: "6px" }}>Custom question answer received — recruiter score required.</div>
                   <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
                     <input
                       className="pi-input"
