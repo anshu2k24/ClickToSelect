@@ -63,6 +63,8 @@ export async function initCheatDetection({
   let mediaStream = null;
   let camera = null;
   let stopped = false;
+  let faceDetectionEnabled = true;
+  let faceDetectionFailureHandled = false;
 
   const reportCheat = async (type, confidence) => {
     onEvent?.({ type, confidence });
@@ -128,8 +130,24 @@ export async function initCheatDetection({
 
   camera = new CameraCtor(video, {
     onFrame: async () => {
-      if (!stopped) {
-        await faceDetection.send({ image: video });
+      if (!stopped && faceDetectionEnabled) {
+        try {
+          await faceDetection.send({ image: video });
+        } catch (error) {
+          faceDetectionEnabled = false;
+
+          if (!faceDetectionFailureHandled) {
+            faceDetectionFailureHandled = true;
+            const msg = String(error?.message || "").toLowerCase();
+            const isWebGlFailure = msg.includes("webgl") || msg.includes("canvas context");
+
+            onStatusChange?.(
+              isWebGlFailure
+                ? "Camera active. Face detection is unavailable on this device/browser (WebGL issue); tab/window monitoring continues."
+                : "Camera active. Face detection paused due to a runtime error; tab/window monitoring continues."
+            );
+          }
+        }
       }
     },
     width: 640,
@@ -163,6 +181,10 @@ export async function initCheatDetection({
 
     if (camera?.stop) {
       camera.stop();
+    }
+
+    if (faceDetection?.close) {
+      await faceDetection.close().catch(() => {});
     }
 
     if (mediaStream) {

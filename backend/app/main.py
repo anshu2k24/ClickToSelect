@@ -27,7 +27,6 @@ from app.routers import report_router
 from app.routers import skill_router
 from app.routers import recruiter_router
 from app.routers import upload_router
-from app.routers import brain_router
 from app.routers import cheat_router
 from app.routers import skill_brain_router
 Base.metadata.create_all(bind=engine)
@@ -50,6 +49,25 @@ def ensure_candidate_skills_schema():
 
 
 ensure_candidate_skills_schema()
+
+
+def ensure_interview_schema():
+    if engine.dialect.name != "postgresql":
+        return
+
+    statements = [
+        "ALTER TABLE interviews ADD COLUMN IF NOT EXISTS status VARCHAR DEFAULT 'created'",
+        "ALTER TABLE interviews ADD COLUMN IF NOT EXISTS llm_sessions VARCHAR[] DEFAULT ARRAY[]::VARCHAR[]",
+        "ALTER TABLE interview_candidates ADD COLUMN IF NOT EXISTS session_index INTEGER",
+        "ALTER TABLE interview_candidates ADD COLUMN IF NOT EXISTS scores INTEGER[] DEFAULT ARRAY[]::INTEGER[]",
+    ]
+
+    with engine.begin() as connection:
+        for statement in statements:
+            connection.execute(text(statement))
+
+
+ensure_interview_schema()
 
 app = FastAPI()
 
@@ -79,7 +97,6 @@ app.include_router(report_router.router)
 app.include_router(skill_router.router)
 app.include_router(recruiter_router.router)
 app.include_router(upload_router.router)
-app.include_router(brain_router.router)
 app.include_router(cheat_router.router)
 app.include_router(skill_brain_router.router)
 @app.get("/")

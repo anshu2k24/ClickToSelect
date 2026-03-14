@@ -5,6 +5,7 @@ import CandidateProfile  from "./pages/candidate/Profile";
 import SkillVerify       from "./pages/candidate/SkillVerify";
 import RecruiterProfile  from "./pages/recruiter/RecruiterProfile";
 import JobRole           from "./pages/recruiter/JobRole";
+import ParallelInterview from "./pages/recruiter/ParallelInterview";
 import ProtectedRoute    from "./components/ProtectedRoute";
 
 function Home() {
@@ -34,6 +35,8 @@ function App() {
         {/* Recruiter protected */}
         <Route path="/recruiter/profile"   element={<ProtectedRoute role="recruiter"><RecruiterProfile /></ProtectedRoute>} />
         <Route path="/recruiter/job/:id"   element={<ProtectedRoute role="recruiter"><JobRole /></ProtectedRoute>} />
+        <Route path="/recruiter/parallel/:interviewId" element={<ProtectedRoute role="recruiter"><ParallelInterview /></ProtectedRoute>} />
+        <Route path="/recruiter/parallel"  element={<ProtectedRoute role="recruiter"><ParallelInterview /></ProtectedRoute>} />
 
         {/* Catch-all */}
         <Route path="*" element={<Navigate to="/" replace />} />
