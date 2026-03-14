@@ -33,6 +33,8 @@ const GLOBAL=`
   .start-int-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:8px;border:none;background:linear-gradient(135deg,#14532d,#16a34a);color:#fff;font-family:'Sora',sans-serif;font-size:12px;font-weight:600;cursor:pointer;box-shadow:0 2px 12px rgba(22,163,74,0.30);transition:transform 0.15s,box-shadow 0.2s;}
   .start-int-btn:hover{transform:translateY(-1px);box-shadow:0 4px 20px rgba(22,163,74,0.45);}
   .awaited-badge{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:8px;border:1px solid rgba(234,88,12,0.32);background:rgba(234,88,12,0.10);color:rgba(253,186,116,0.95);font-family:'Space Mono',monospace;font-size:10px;font-weight:700;letter-spacing:0.06em;}
+  .llm-help-btn{display:inline-flex;align-items:center;gap:7px;padding:8px 14px;border-radius:8px;border:1.5px solid rgba(168,85,247,0.30);background:rgba(168,85,247,0.10);color:#C084FC;font-family:'Sora',sans-serif;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.2s;}
+  .llm-help-btn:hover{background:rgba(168,85,247,0.17);border-color:#A855F7;transform:translateY(-1px);}
 `;
 
 function CandidateCard({candidate,onStartInterview}){
@@ -82,6 +84,7 @@ export default function JobRole(){
   const[sortBy,setSortBy]=useState("score");
   const [cheatLogs, setCheatLogs] = useState([]);
   const [pageError, setPageError] = useState("");
+  const isLlmInitError = /Failed to initialize LLM session|LLM service|api\/verify|api\/interview/i.test(String(pageError || ""));
   const activeInterviewIdsKey = candidates.map((candidate) => candidate.interviewId).filter(Boolean).sort().join("|");
 
   useEffect(() => {
@@ -349,7 +352,16 @@ export default function JobRole(){
                 ))}
               </div>
               <div style={{padding:"18px 26px 26px"}}>
-                {pageError && <div style={{marginBottom:"16px",padding:"12px 14px",borderRadius:"12px",background:"rgba(248,113,113,0.10)",border:`1px solid rgba(248,113,113,0.30)`,fontFamily:"'Sora',sans-serif",fontSize:"12px",color:"#fecaca"}}>{pageError}</div>}
+                {pageError && (
+                  <div style={{marginBottom:"16px",padding:"12px 14px",borderRadius:"12px",background:"rgba(248,113,113,0.10)",border:`1px solid rgba(248,113,113,0.30)`,fontFamily:"'Sora',sans-serif",fontSize:"12px",color:"#fecaca"}}>
+                    <div>{pageError}</div>
+                    {isLlmInitError && (
+                      <div style={{marginTop:"10px"}}>
+                        <button className="llm-help-btn" onClick={()=>navigate("/recruiter/llm-setup")}>Open LLM Setup Guide</button>
+                      </div>
+                    )}
+                  </div>
+                )}
                 <div style={{marginBottom:"18px",padding:"16px",borderRadius:"14px",background:`rgba(168,85,247,0.08)`,border:`1px solid rgba(168,85,247,0.18)`}}>
                   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px",marginBottom:"12px",flexWrap:"wrap"}}>
                     <div style={{fontFamily:"'Sora',sans-serif",fontSize:"14px",fontWeight:"700",color:"#fff"}}>Live Interview Monitoring</div>

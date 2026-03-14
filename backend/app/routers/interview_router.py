@@ -11,7 +11,7 @@ from app.models.interview_model import Interview
 from app.models.job_model import Job
 from app.utils.jwt_dependency import get_current_user, require_roles
 
-LLM_BASE_URL = "http://localhost:8080/api/interview"
+LLM_BASE_URL = "http://localhost:8080/api/verify"
 
 router = APIRouter(
     prefix="/interview",
@@ -125,6 +125,8 @@ def start_interview(
     _=Depends(require_roles("recruiter")),
 ):
     interview = _get_interview_or_404(db, interview_id)
+    job = db.query(Job).filter(Job.id == interview.job_id).first()
+    inferred_skill = (job.role if job and job.role else (job.title if job and job.title else "General Interview"))
 
     if interview.status == "started" and isinstance(interview.llm_sessions, list) and len(interview.llm_sessions) == 3:
         return {
@@ -139,7 +141,7 @@ def start_interview(
         try:
             res = requests.post(
                 f"{LLM_BASE_URL}/init",
-                json={"interview_id": interview_id},
+                json={"skill_name": inferred_skill},
                 timeout=15,
             )
             res.raise_for_status()
@@ -342,21 +344,14 @@ def answer_question(
         try:
             answer_res = requests.post(
                 f"{LLM_BASE_URL}/answer",
+                params={"session_id": session_id},
                 json={
-                    "session_id": session_id,
                     "candidate_response": answer.strip(),
                 },
                 timeout=15,
             )
             answer_res.raise_for_status()
-
-            score_res = requests.get(
-                f"{LLM_BASE_URL}/evaluation",
-                params={"session_id": session_id},
-                timeout=15,
-            )
-            score_res.raise_for_status()
-            score_payload = score_res.json()
+            score_payload = answer_res.json()
             score = _to_int_score(score_payload.get("score"))
         except HTTPException:
             raise

@@ -6,6 +6,7 @@ import SkillVerify       from "./pages/candidate/SkillVerify";
 import RecruiterProfile  from "./pages/recruiter/RecruiterProfile";
 import JobRole           from "./pages/recruiter/JobRole";
 import ParallelInterview from "./pages/recruiter/ParallelInterview";
+import LLMSetup          from "./pages/recruiter/LLMSetup";
 import ProtectedRoute    from "./components/ProtectedRoute";
 
 function Home() {
@@ -37,6 +38,7 @@ function App() {
         <Route path="/recruiter/job/:id"   element={<ProtectedRoute role="recruiter"><JobRole /></ProtectedRoute>} />
         <Route path="/recruiter/parallel/:interviewId" element={<ProtectedRoute role="recruiter"><ParallelInterview /></ProtectedRoute>} />
         <Route path="/recruiter/parallel"  element={<ProtectedRoute role="recruiter"><ParallelInterview /></ProtectedRoute>} />
+        <Route path="/recruiter/llm-setup" element={<ProtectedRoute role="recruiter"><LLMSetup /></ProtectedRoute>} />
 
         {/* Catch-all */}
         <Route path="*" element={<Navigate to="/" replace />} />
